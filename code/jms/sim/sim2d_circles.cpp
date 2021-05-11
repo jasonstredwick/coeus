@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <functional>
@@ -85,9 +84,9 @@ protected:
   alignas(64) std::array<sim_t, VIEW_RAYS> agent_view;
 private:
   // partial results used during calculations.
+  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> collision_check;
   alignas(64) std::array<sim_t, VIEW_RAYS> rays_dx;
   alignas(64) std::array<sim_t, VIEW_RAYS> rays_dy;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> collision_check;
   alignas(64) std::array<sim_t, VIEW_RAYS> working_agent_view;
 protected:
   std::mt19937_64 rng; // multithreading/distributed compute
@@ -267,13 +266,13 @@ void Sim2DCircles::Step(void) {
   // High level (initial) check for food/agent collision
   sim_t H = speed_a / 2;
   sim_t I = SPEED_FOOD_MOVE / 2;
-  for (size_t i=0; i<NUM_FOOD_PER_AGENT; ++i) {
+  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
     // Load food information
-    sim_t px_f = food_pos_x[i];
-    sim_t py_f = food_pos_y[i];
-    sim_t dx_f = food_dir_x[i];
-    sim_t dy_f = food_dir_y[i];
-    sim_t r_f = food_radius[i];
+    sim_t px_f = food_pos_x[index];
+    sim_t py_f = food_pos_y[index];
+    sim_t dx_f = food_dir_x[index];
+    sim_t dy_f = food_dir_y[index];
+    sim_t r_f = food_radius[index];
 
     sim_t A = px_f - px_a;
     sim_t C = py_f - py_a;
@@ -286,20 +285,21 @@ void Sim2DCircles::Step(void) {
     sim_t fy = C + K;
     sim_t f_2 = fx * fx + fy * fy;
     sim_t f_distance = E + H + I;
-    collision_check[i] = f_distance - f_2;
+    collision_check[index] = f_distance - f_2;
   }
 
   // For possible collisions, determine if an actual collision occurred
-  for (size_t i=0; i<NUM_FOOD_PER_AGENT; ++i) {
-    // Load food information
-    sim_t px_f = food_pos_x[i];
-    sim_t py_f = food_pos_y[i];
-    sim_t dx_f = food_dir_x[i];
-    sim_t dy_f = food_dir_y[i];
-    sim_t r_f = food_radius[i];
-    sim_t energy_f = food_energy[i];
+  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
+    sim_t energy_f = food_energy[index];
 
-    if (collision_check[i] >= 0) {
+    if (collision_check[index] >= 0) {
+      // Load food information
+      sim_t px_f = food_pos_x[index];
+      sim_t py_f = food_pos_y[index];
+      sim_t dx_f = food_dir_x[index];
+      sim_t dy_f = food_dir_y[index];
+      sim_t r_f = food_radius[index];
+
       // Reused calculations
       sim_t A = px_f - px_a;
       sim_t B = dx_f - dx_a;
@@ -321,13 +321,13 @@ void Sim2DCircles::Step(void) {
         if (t1 >= 0 or t2 >= 0) {
           // collision
           energy_a += ENERGY_GAIN_FOOD;
-          CreateFood(i);
+          CreateFood(index);
           continue;
         }
       }
     }
     if (energy_f - ENERGY_CONSUMPTION_FOOD_MOVE <= 0) {
-      CreateFood(i);
+      CreateFood(index);
     }
   }
 
@@ -341,72 +341,97 @@ void Sim2DCircles::Step(void) {
   agent_info[AGENT_ENERGY] = energy_a;
 
   // Move food
-  for (size_t i=0; i<NUM_FOOD_PER_AGENT; ++i) {
+  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
     // Load food information
-    sim_t px_f = food_pos_x[i];
-    sim_t py_f = food_pos_y[i];
-    sim_t dx_f = food_dir_x[i];
-    sim_t dy_f = food_dir_y[i];
-    sim_t r_f = food_radius[i];
-    sim_t energy_f = food_energy[i];
+    sim_t px_f = food_pos_x[index];
+    sim_t py_f = food_pos_y[index];
+    sim_t dx_f = food_dir_x[index];
+    sim_t dy_f = food_dir_y[index];
+    sim_t r_f = food_radius[index];
+    sim_t energy_f = food_energy[index];
 
     // Update food position
-    food_pos_x[i] = fma(SPEED_FOOD_MOVE, dx_f, px_f);
-    food_pos_y[i] = fma(SPEED_FOOD_MOVE, dy_f, py_f);
-    food_energy[i] = energy_f - ENERGY_CONSUMPTION_FOOD_MOVE;
+    food_pos_x[index] = fma(SPEED_FOOD_MOVE, dx_f, px_f);
+    food_pos_y[index] = fma(SPEED_FOOD_MOVE, dy_f, py_f);
+    food_energy[index] = energy_f - ENERGY_CONSUMPTION_FOOD_MOVE;
   }
 
   // Generate agent view
-  for (size_t i=0; i<VIEW_RAYS; ++i) {
-    sim_t cos_t = COS_ANGLES[i];
-    sim_t sin_t = SIN_ANGLES[i];
-    rays_dx[i] = dx_a * cos_t - dy_a * sin_t;
-    rays_dy[i] = dx_a * sin_t + dy_a * cos_t;
+  for (size_t index=0; index<VIEW_RAYS; ++index) {
+    sim_t cos_t = COS_ANGLES[index];
+    sim_t sin_t = SIN_ANGLES[index];
+    rays_dx[index] = dx_a * cos_t - dy_a * sin_t;
+    rays_dy[index] = dx_a * sin_t + dy_a * cos_t;
   }
   std::fill_n(working_agent_view.begin(), VIEW_RAYS, MAX_VALUE);
 
-  for (size_t i=0; i<NUM_FOOD_PER_AGENT; ++i) {
+  // Slowest unit of this function by a few orders of magnitude.
+  for (size_t food_index=0; food_index<NUM_FOOD_PER_AGENT; ++food_index) {
     // Load food information
-    sim_t px_f = food_pos_x[i];
-    sim_t py_f = food_pos_y[i];
-    sim_t dx_f = food_dir_x[i];
-    sim_t dy_f = food_dir_y[i];
-    sim_t r_f = food_radius[i];
+    sim_t px_f = food_pos_x[food_index];
+    sim_t py_f = food_pos_y[food_index];
+    sim_t dx_f = food_dir_x[food_index];
+    sim_t dy_f = food_dir_y[food_index];
+    sim_t r_f = food_radius[food_index];
 
-    sim_t E = r_f + r_a;
+    sim_t A = px_a - px_f;
+    sim_t C = py_a - py_f;
+    sim_t F = r_f * r_f;
+    sim_t G = A * A + C * C - F;
+    sim_t H = -G;
 
-    for (size_t ray_i=0; ray_i<VIEW_RAYS; ++ray_i) {
-      sim_t ray_distance = working_agent_view[ray_i];
+    // test if food is touching ends or in the middle of view range.
+    // left
+    sim_t rays_dx_l = rays_dx[0];
+    sim_t rays_dy_l = rays_dy[0];
+    sim_t b_partial_l = A * rays_dx_l + C * rays_dy_l;
+    sim_t discriminant_l = fma(b_partial_l, b_partial_l, H);
+    // right
+    sim_t rays_dx_r = rays_dx[VIEW_RAYS - 1];
+    sim_t rays_dy_r = rays_dy[VIEW_RAYS - 1];
+    sim_t b_partial_r = A * rays_dx_r + C * rays_dy_r;
+    sim_t discriminant_r = fma(b_partial_r, b_partial_r, H);
+    if (discriminant_l < 0 && discriminant_r < 0) { // no intersection
+      sim_t af_x = px_f - px_a;
+      sim_t af_y = py_f - py_a;
+      // ax * by - ay * bx : a == ray; b == af (agent to food vector; f - a)
+      sim_t dir_l = rays_dx_l * af_y - rays_dy_l * af_x;
+      sim_t dir_r = rays_dx_r * af_y - rays_dy_r * af_x;
+      // in between = dir_l <= 0 (to the right) && dir_r >= 0 (to the left)
+      // check for not between
+      if (dir_l > 0 || dir_r < 0) {
+        continue;
+      }
+    }
 
-      sim_t A = px_a - px_f;
-      sim_t C = py_a - py_f;
-      sim_t F = r_f * r_f;
-
+    for (size_t ray_index=0; ray_index<VIEW_RAYS; ++ray_index) {
       // sim_t a = ONE;
-      sim_t b_partial = A * rays_dx[ray_i] + C * rays_dy[ray_i];
-      sim_t c = A * A + C * C - F;
-      sim_t discriminant = fma(b_partial, b_partial, -c);
-      if (discriminant >= 0) { // does intersect
-        sim_t q = -(-b_partial +
+      sim_t b_partial = A * rays_dx[ray_index] + C * rays_dy[ray_index];
+      sim_t discriminant = fma(b_partial, b_partial, H);
+      if (discriminant >= 0) {
+        sim_t ray_distance = working_agent_view[ray_index];
+        sim_t x = ray_distance;
+        // x1 = q / a -> q / 1 -> q
+        sim_t x1 = -(-b_partial +
                     std::copysign(std::sqrt(discriminant), -b_partial));
-        sim_t t1 = q; // q / a -> q / 1 -> q
-        sim_t t2 = c / q;
-        sim_t t = ray_distance;
-        if (t1 > RADIUS_AGENT && t1 < t) {
-          t = t1; 
+        if (x1 > RADIUS_AGENT && x1 < x) {
+          x = x1;
         }
-        if (t2 > RADIUS_AGENT && t2 < t) {
-          t = t2;
+        if (x1 != 0) {
+          sim_t x2 = G / x1;
+          if (x2 > RADIUS_AGENT && x2 < x) {
+            x = x2;
+          }
         }
-        if (t < ray_distance) {
-          working_agent_view[ray_i] = t;
+        if (x < ray_distance) {
+          working_agent_view[ray_index] = x;
         }
       }
     }
   }
 
-  for (size_t i=0; i<VIEW_RAYS; ++i) {
-    agent_view[i] = LuminescenceValue(working_agent_view[i]);
+  for (size_t index=0; index<VIEW_RAYS; ++index) {
+    agent_view[index] = LuminescenceValue(working_agent_view[index]);
   }
 
   return;
