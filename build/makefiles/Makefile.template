@@ -1,0 +1,35 @@
+CODE_DIR = ../../../code
+OBJ_DIR = objs
+OBJS = $(patsubst %, $(OBJ_DIR)/%, $(SRCS:=.o))
+DEPS = $(patsubst %, $(OBJ_DIR)/%, $(SRCS:=.d))
+-include $(DEPS)
+
+CC = gcc
+CXX = g++
+CPPFLAGS := $(CPPFLAGS) -MMD -I$(CODE_DIR)
+#LDFLAGS := $(LDFLAGS)
+LDLIBS = $(LIBS)
+TARGET ?= a.out
+OS = $(shell uname -s)
+
+$(TARGET): $(OBJS)
+	g++ $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+.PRECIOUS: $(OBJ_DIR)/. $(OBJ_DIR)%/.
+
+$(OBJ_DIR)/.:
+	mkdir -p $@
+
+$(OBJ_DIR)%/.:
+	mkdir -p $@
+
+.SECONDEXPANSION:
+
+.PHONY: %.d
+%.d:
+%.o: | $$(@D)/.
+	$(CC) $(patsubst $(OBJ_DIR)/%.o, $(CODE_DIR)/%, $@) $(CPPFLAGS) -c -o $@
+
+.PHONY: clean
+clean:
+	rm -f $(OBJS) $(DEPS) $(TARGET)
