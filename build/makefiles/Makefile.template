@@ -25,9 +25,8 @@ $(OBJ_DIR)%/.:
 
 .SECONDEXPANSION:
 
-.PHONY: %.d
-%.d:
-%.o: | $$(@D)/.
+%.d: | $$(@D)/. ;
+%.o:
 	$(CC) $(patsubst $(OBJ_DIR)/%.o, $(CODE_DIR)/%, $@) $(CPPFLAGS) -c -o $@
 
 .PHONY: clean

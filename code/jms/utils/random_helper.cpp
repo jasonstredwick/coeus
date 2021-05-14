@@ -1,4 +1,4 @@
-#include "utils/random_helper.h"
+#include "jms/utils/random_helper.h"
 
 #include <optional>
 #include <random>
@@ -7,7 +7,7 @@
 
 namespace jms {
 namespace utils {
-namespace random_helper{
+namespace random_helper {
 
 
 void SetSeed_mt19937_64(std::mt19937_64& rng, optional_seed_input_t seed) {

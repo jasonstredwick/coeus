@@ -14,6 +14,7 @@ BUILD_DIR=$ROOT_DIR/build
 CODE_DIR=$ROOT_DIR/code
 DIST_DIR=$ROOT_DIR/dist
 
+ARGS=()
 APP=""
 COMMAND=""
 VERSION=""
@@ -23,15 +24,13 @@ do
   if [ $1 == '--app' ]; then APP=$2; shift; shift; continue; fi
   if [ $1 == '--version' ]; then VERSION=$2; shift; shift; continue; fi
   if [ $1 == '--help' ]; then help; exit 0; fi
-  if [ -z $COMMAND ]; then COMMAND=$1; shift; continue; fi
-  echo 'Bad arguments'
-  echo ''
-  help
-  exit 1
+  ARGS+=($1)
+  shift
 done
 
 if [ -z $APP ]; then echo 'Missing app'; echo ''; help; exit 1; fi
 if [ -z $VERSION ]; then VERSION='production'; fi
+if [ ${#ARGS[@]} -eq 1 ]; then COMMAND="${ARGS[0]}"; fi
 
 TARGET_DIR=$DIST_DIR/$APP/$VERSION
 if [ ! -d $TARGET_DIR ]; then mkdir -p $TARGET_DIR; fi
@@ -52,7 +51,7 @@ case $COMMAND in
     CreateMakefile
     ;;
   *)
-    make -C $TARGET_DIR $COMMAND
+    make -C $TARGET_DIR "${ARGS[@]}"
     ;;
 esac
 

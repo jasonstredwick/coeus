@@ -1,5 +1,5 @@
-#ifndef RANDOM_UTIL_H
-#define RANDOM_UTIL_H
+#ifndef JMS_UTILS_RANDOM_HELPER_H
+#define JMS_UTILS_RANDOM_HELPER_H
 
 
 #include <optional>
@@ -9,7 +9,7 @@
 
 namespace jms {
 namespace utils {
-namespace random_helper{
+namespace random_helper {
 
 
 using seed_input_t = std::vector<std::seed_seq::result_type>;
@@ -25,4 +25,4 @@ void SetSeed_mt19937_64(std::mt19937_64& rng,
 } // namespace jms
 
 
-#endif // RANDOM_UTIL_H
+#endif // JMS_UTILS_RANDOM_HELPER_H
