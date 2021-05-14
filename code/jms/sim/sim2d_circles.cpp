@@ -1,4 +1,4 @@
-#include "sim/sim2d_circles.h"
+#include "jms/sim/sim2d_circles.h"
 
 #include <algorithm>
 #include <array>
@@ -10,9 +10,9 @@
 #include <optional>
 #include <random>
 
-#include "sim/interface.h"
-#include "sim/sim_t.h"
-#include "utils/random_helper.h"
+#include "jms/sim/interface.h"
+#include "jms/sim/sim_t.h"
+#include "jms/utils/random_helper.h"
 
 
 namespace jms {
@@ -45,19 +45,22 @@ public:
   static constexpr sim_t ENERGY_GAIN_FOOD = 1000.0;
   static constexpr sim_t ENERGY_START_AGENT = 10000.0;
   static constexpr sim_t ENERGY_START_FOOD = 1000.0;
-  static constexpr sim_t INTENSITY_MAX = 2500.0 * SPACE_UNIT;
+  static constexpr sim_t INTENSITY_MAX = 999.0 * SPACE_UNIT;
   static constexpr size_t NUM_FOOD_PER_AGENT = 8192;
   static constexpr sim_t RADIUS_AGENT = 2.0 * SPACE_UNIT;
   static constexpr sim_t RADIUS_AGENT_SQUARED = RADIUS_AGENT * RADIUS_AGENT;
   static constexpr sim_t RADIUS_FOOD_MIN = 0.5 * SPACE_UNIT;
   static constexpr sim_t RADIUS_FOOD_MAX = 6.0 * SPACE_UNIT;
+  static constexpr sim_t RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<sim_t>::max());
   static constexpr sim_t SPAWN_RADIUS_MIN = 10.0 * SPACE_UNIT;
-  static constexpr sim_t SPAWN_RADIUS_MAX = 2500.0 * SPACE_UNIT;
+  static constexpr sim_t SPAWN_RADIUS_MAX = 999.0 * SPACE_UNIT;
+  static constexpr sim_t SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<sim_t>::max());
   static constexpr sim_t SPAWN_RADIUS_DELTA =
       SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
   static constexpr sim_t SPEED_AGENT_MOVE = 5.0 * SPACE_UNIT;
   static constexpr sim_t SPEED_AGENT_SPRINT = 10.0 * SPACE_UNIT;
   static constexpr sim_t SPEED_FOOD_MOVE = 1.0 * SPACE_UNIT;
+  static constexpr sim_t UNIT_MIN_DELTA = std::nextafter(ONE, std::numeric_limits<sim_t>::max());
   static constexpr size_t VIEW_RAYS = 1024;
   static constexpr sim_t VIEW_RAYS_ANGLE_RANGE =
       std::numbers::pi / 4.0; // 45deg
@@ -67,7 +70,7 @@ public:
   // we want to ensure the forward direction is represented.
   static constexpr sim_t VIEW_RAYS_ANGLE_START =
       -(VIEW_RAYS_ANGLE_RANGE / 2.0) + VIEW_RAYS_ANGLE_DELTA;
-  static constexpr sim_t VIEW_DISTANCE = 1000.0 * SPACE_UNIT;
+  static constexpr sim_t VIEW_DISTANCE = 500.0 * SPACE_UNIT;
   // Based on counterclockwise rotation sweeping from left to right.
   alignas(64) static const std::array<sim_t, VIEW_RAYS> COS_ANGLES;
   alignas(64) static const std::array<sim_t, VIEW_RAYS> SIN_ANGLES;
@@ -219,21 +222,21 @@ void Sim2DCircles::CreateFood(size_t index) {
 
 
 sim_t Sim2DCircles::GenUnit(void) {
-  std::uniform_real_distribution<sim_t> dist(NEG_ONE, LARGEST_AFTER_ONE_DIST);
+  std::uniform_real_distribution<sim_t> dist(NEG_ONE, ONE + UNIT_MIN_DELTA);
   return dist(rng);
 };
 
 
 sim_t Sim2DCircles::GenRadius() {
   std::uniform_real_distribution<sim_t> dist(RADIUS_FOOD_MIN,
-                                             RADIUS_FOOD_MAX + MIN_DELTA);
+                                             RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
   return dist(rng);
 }
 
 
 sim_t Sim2DCircles::GenSpawnRadius() {
   std::uniform_real_distribution<sim_t> dist(SPAWN_RADIUS_MIN,
-                                             SPAWN_RADIUS_MAX + MIN_DELTA);
+                                             SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
   return dist(rng);
 }
 

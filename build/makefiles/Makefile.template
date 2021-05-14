@@ -2,7 +2,6 @@ CODE_DIR = ../../../code
 OBJ_DIR = objs
 OBJS = $(patsubst %, $(OBJ_DIR)/%, $(SRCS:=.o))
 DEPS = $(patsubst %, $(OBJ_DIR)/%, $(SRCS:=.d))
--include $(DEPS)
 
 CC = gcc
 CXX = g++
@@ -14,6 +13,8 @@ OS = $(shell uname -s)
 
 $(TARGET): $(OBJS)
 	g++ $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+-include $(DEPS)
 
 .PRECIOUS: $(OBJ_DIR)/. $(OBJ_DIR)%/.
 

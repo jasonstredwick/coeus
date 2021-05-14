@@ -6,8 +6,8 @@
 #include <optional>
 #include <random>
 
-#include "utils/random_helper.h"
-#include "sim/interface.h"
+#include "jms/utils/random_helper.h"
+#include "jms/sim/interface.h"
 
 
 namespace jms {
