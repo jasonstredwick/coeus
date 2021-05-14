@@ -44,7 +44,7 @@ function CreateMakefile {
 if [ ! -f $MAKEFILE ]; then CreateMakefile; fi
 
 case $COMMAND in
-  clearall)
+  cleanall)
     rm -rf $TARGET_DIR/*
     ;;
   update)
