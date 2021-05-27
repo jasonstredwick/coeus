@@ -92,6 +92,10 @@ ArgResults ProcessArgs(int argc, char** argv) {
           results.msg = "Invalid number of batch steps provided.";
           break;
         }
+      } else {
+        results.success = false;
+        results.msg = "Invalid argument";
+        break;
       }
     }
     if (results.batch_steps <= 0) {
@@ -140,6 +144,7 @@ int main(int argc, char** argv) {
       // run with no threading.
       auto t = clock.now();
       for (int32_t i : std::ranges::iota_view{0, num_steps}) {
+        auto t1 = clock.now();
         for (auto& sim : sims) {
           if (batch_steps == 1) {
             sim->Step();
@@ -147,6 +152,8 @@ int main(int argc, char** argv) {
             sim->StepN(batch_steps);
           }
         }
+        auto dt1 = clock.now() - t1;
+        fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
       }
       auto dt = clock.now() - t;
       total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
@@ -175,8 +182,11 @@ int main(int argc, char** argv) {
       }
       auto t = clock.now();
       for (size_t step=0; step<num_steps; ++step) {
+        auto t1 = clock.now();
         executor.run(taskflow);
         executor.wait_for_all();
+        auto dt1 = clock.now() - t1;
+        fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
       }
       auto dt = clock.now() - t;
       total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();

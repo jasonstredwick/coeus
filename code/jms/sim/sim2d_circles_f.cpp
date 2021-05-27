@@ -90,16 +90,29 @@ public:
   virtual ~Sim2DCircles_f(void) = default;
 
   static std::unique_ptr<Interface> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
-  float LuminescenceValue(float v) noexcept;
   virtual void Step(void) noexcept override;
   virtual void StepN(int32_t num_steps) noexcept override;
 
 protected:
+  inline float GenUnit(void) noexcept {
+    std::uniform_real_distribution<float> dist(-1.0f, 1.0f + UNIT_MIN_DELTA);
+    return dist(rng);
+  }
+  inline float GenRadius() noexcept {
+    std::uniform_real_distribution<float> dist(RADIUS_FOOD_MIN, RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
+    return dist(rng);
+  }
+  inline float GenSpawnRadius() noexcept {
+    std::uniform_real_distribution<float> dist(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
+    return dist(rng);
+  }
   void InitializeAgent(void) noexcept;
   void InitializeFood(int32_t index) noexcept;
-  float GenUnit(void) noexcept;
-  float GenRadius(void) noexcept;
-  float GenSpawnRadius(void) noexcept;
+  inline float LuminescenceValue(float v) noexcept {
+    //return (v > INTENSITY_MAX) ? 0.0f : (1.0f - (v / INTENSITY_MAX));
+    // 1 - v / IM = 1 - v * (1/IM) = -(v * (1/IM)) + 1 = -v * (1/IM) + 1 = v * (-1/IM) + 1
+    return (v > INTENSITY_MAX) ? 0.0f : std::fma(v, INTENSITY_MAX_INV_NEG, 1.0f);
+  }
 };
 
 
@@ -130,24 +143,6 @@ std::unique_ptr<Interface> Sim2DCircles_f::Create(jms::utils::random_helper::opt
   for (int32_t index : std::ranges::iota_view {0, NUM_FOOD_PER_AGENT}) { sim->InitializeFood(index); }
   std::fill_n(sim->agent_view.begin(), VIEW_RAYS, 0.0f);
   return sim;
-}
-
-
-float Sim2DCircles_f::GenUnit(void) noexcept {
-  std::uniform_real_distribution<float> dist(-1.0f, 1.0f + UNIT_MIN_DELTA);
-  return dist(rng);
-};
-
-
-float Sim2DCircles_f::GenRadius() noexcept {
-  std::uniform_real_distribution<float> dist(RADIUS_FOOD_MIN, RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
-  return dist(rng);
-}
-
-
-float Sim2DCircles_f::GenSpawnRadius() noexcept {
-  std::uniform_real_distribution<float> dist(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
-  return dist(rng);
 }
 
 
@@ -197,13 +192,6 @@ void Sim2DCircles_f::InitializeFood(int32_t index) noexcept {
   food_radius[index] = GenRadius();
   food_energy[index] = ENERGY_START_FOOD;
   return;
-}
-
-
-float Sim2DCircles_f::LuminescenceValue(float v) noexcept {
-  //return (v > INTENSITY_MAX) ? 0.0f : (1.0f - (v / INTENSITY_MAX));
-  // 1 - v / IM = 1 - v * (1/IM) = -(v * (1/IM)) + 1 = -v * (1/IM) + 1 = v * (-1/IM) + 1
-  return (v > INTENSITY_MAX) ? 0.0f : std::fma(v, INTENSITY_MAX_INV_NEG, 1.0f);
 }
 
 
