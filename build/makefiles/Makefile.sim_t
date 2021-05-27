@@ -1,5 +1,0 @@
-CPPFLAGS = -std=c++20 -march=native -mtune=native -O3
-LIBS = -lfmt
-SRCS = \
-	targets/scratch/sim_t.cpp
-TARGET = sim_t

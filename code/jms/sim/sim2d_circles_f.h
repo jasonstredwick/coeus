@@ -1,8 +1,9 @@
-#include "jms/sim/sim2d_circles.h"
+#ifndef SIM2d_CIRCLES_F_H
+#define SIM2d_CIRCLES_F_H
+
 
 #include <numbers>
 
-#include "jms/sim/interface.h"
 #include "jms/utils/random_helper.h"
 
 
@@ -16,7 +17,7 @@ inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
 inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
 inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
 */
-class Sim2DCircles_f : public Interface {
+class Sim2DCircles_f {
 public:
   static constexpr float SPACE_UNIT = 0.0001f; // used below
   static constexpr int32_t AGENT_POS_X = 0;
@@ -43,14 +44,17 @@ public:
   static constexpr float RADIUS_FOOD_MIN = 0.5f * SPACE_UNIT;
   static constexpr float RADIUS_FOOD_MAX = 6.0f * SPACE_UNIT;
   static constexpr float RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<float>::max());
+  static constexpr float RADIUS_FOOD_MAX_WITH_DELTA = RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA;
   static constexpr float SPAWN_RADIUS_MIN = 10.0f * SPACE_UNIT;
   static constexpr float SPAWN_RADIUS_MAX = 999.0f * SPACE_UNIT;
   static constexpr float SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<float>::max());
+  static constexpr float SPAWN_RADIUS_MAX_WITH_DELTA = SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA;
   static constexpr float SPAWN_RADIUS_DELTA = SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
   static constexpr float SPEED_AGENT_MOVE = 5.0f * SPACE_UNIT;
   static constexpr float SPEED_AGENT_SPRINT = 10.0f * SPACE_UNIT;
   static constexpr float SPEED_FOOD_MOVE = 1.0f * SPACE_UNIT;
   static constexpr float UNIT_MIN_DELTA = std::nextafter(1.0f, std::numeric_limits<float>::max());
+  static constexpr float UNIT_MAX_WITH_DELTA = 1.0f + UNIT_MIN_DELTA;
   static constexpr int32_t VIEW_RAYS = 1024;
   static constexpr float VIEW_RAYS_ANGLE_RANGE = static_cast<float>(std::numbers::pi / 4.0); // 45deg
   static constexpr float VIEW_RAYS_ANGLE_DELTA = VIEW_RAYS_ANGLE_RANGE / static_cast<float>(VIEW_RAYS);
@@ -87,23 +91,22 @@ public:
   Sim2DCircles_f(const Sim2DCircles_f&&) = delete;
   Sim2DCircles_f& operator=(const Sim2DCircles_f&) = delete;
   Sim2DCircles_f& operator=(const Sim2DCircles_f&&) = delete;
-  virtual ~Sim2DCircles_f(void) = default;
+  ~Sim2DCircles_f(void) = default;
 
-  static std::unique_ptr<Interface> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
-  virtual void Step(void) noexcept override;
-  virtual void StepN(int32_t num_steps) noexcept override;
+  static std::unique_ptr<Sim2DCircles_f> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+  void Step(void) noexcept;
 
 protected:
   inline float GenUnit(void) noexcept {
-    std::uniform_real_distribution<float> dist(-1.0f, 1.0f + UNIT_MIN_DELTA);
+    std::uniform_real_distribution<float> dist(-1.0f, UNIT_MAX_WITH_DELTA);
     return dist(rng);
   }
   inline float GenRadius() noexcept {
-    std::uniform_real_distribution<float> dist(RADIUS_FOOD_MIN, RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
+    std::uniform_real_distribution<float> dist(RADIUS_FOOD_MIN, RADIUS_FOOD_MAX_WITH_DELTA);
     return dist(rng);
   }
   inline float GenSpawnRadius() noexcept {
-    std::uniform_real_distribution<float> dist(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
+    std::uniform_real_distribution<float> dist(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX_WITH_DELTA);
     return dist(rng);
   }
   void InitializeAgent(void) noexcept;
@@ -136,7 +139,7 @@ const std::array<float, Sim2DCircles_f::VIEW_RAYS> Sim2DCircles_f::SIN_ANGLES{
   }()};
 
 
-std::unique_ptr<Interface> Sim2DCircles_f::Create(jms::utils::random_helper::optional_seed_input_t seed) {
+std::unique_ptr<Sim2DCircles_f> Sim2DCircles_f::Create(jms::utils::random_helper::optional_seed_input_t seed) {
   std::unique_ptr<Sim2DCircles_f> sim{new Sim2DCircles_f{}};
   jms::utils::random_helper::SetSeed_mt19937_64(sim->rng, seed);
   sim->InitializeAgent();
@@ -395,18 +398,8 @@ void Sim2DCircles_f::Step(void) noexcept {
 }
 
 
-void Sim2DCircles_f::StepN(int32_t num_steps) noexcept {
-  for (auto i : std::ranges::iota_view{0, num_steps}) {
-    Step();
-  }
-  return;
-}
-
-
-std::unique_ptr<Interface> CreateSim2DCircles_f(jms::utils::random_helper::optional_seed_input_t seed) {
-  return Sim2DCircles_f::Create(seed);
-}
-
-
 } // namespace sim
 } // namespace jms
+
+
+#endif // SIM2d_CIRCLES_F_H
