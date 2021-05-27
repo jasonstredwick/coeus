@@ -9,7 +9,8 @@ namespace sim {
 class Interface {
 public:
   virtual ~Interface() {}
-  virtual void Step(void) = 0;
+  virtual void Step(void) noexcept = 0;
+  virtual void StepN(int32_t num_steps) noexcept = 0;
 };
 
 

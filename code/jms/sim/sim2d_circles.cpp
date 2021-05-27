@@ -1,17 +1,8 @@
 #include "jms/sim/sim2d_circles.h"
 
-#include <algorithm>
-#include <array>
-#include <cmath>
-#include <cstddef>
-#include <functional>
-#include <memory>
 #include <numbers>
-#include <optional>
-#include <random>
 
 #include "jms/sim/interface.h"
-#include "jms/sim/sim_t.h"
 #include "jms/utils/random_helper.h"
 
 
@@ -22,195 +13,183 @@ namespace sim {
 /*
 inline constexpr size_t BUFFER_DIM = 1024;
 inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
-inline constexpr sim_t SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
+inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
 inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
 */
 class Sim2DCircles : public Interface {
 public:
-  static constexpr sim_t SPACE_UNIT = 0.0001; // used below
-  static constexpr size_t AGENT_POS_X = 0;
-  static constexpr size_t AGENT_POS_Y = 1;
-  static constexpr size_t AGENT_DIR_X = 2;
-  static constexpr size_t AGENT_DIR_Y = 3;
-  static constexpr size_t AGENT_RADIUS = 4;
-  static constexpr size_t AGENT_ENERGY = 5;
-  static constexpr size_t AGENT_SPEED = 6;
-  static constexpr sim_t ENERGY_CONSUMPTION_FOOD_IDLE = 0.5;
-  static constexpr sim_t ENERGY_CONSUMPTION_FOOD_MOVE = 1.0;
-  static constexpr sim_t ENERGY_CONSUMPTION_AGENT_IDLE = 1.0;
-  static constexpr sim_t ENERGY_CONSUMPTION_AGENT_MOVE = 1.0;
-  static constexpr sim_t ENERGY_CONSUMPTION_AGENT_ROTATION =
-      2.0 / std::numbers::pi;
-  static constexpr sim_t ENERGY_CONSUMPTION_AGENT_SPRINT = 15.0;
-  static constexpr sim_t ENERGY_GAIN_FOOD = 1000.0;
-  static constexpr sim_t ENERGY_START_AGENT = 10000.0;
-  static constexpr sim_t ENERGY_START_FOOD = 1000.0;
-  static constexpr sim_t INTENSITY_MAX = 999.0 * SPACE_UNIT;
-  static constexpr size_t NUM_FOOD_PER_AGENT = 8192;
-  static constexpr sim_t RADIUS_AGENT = 2.0 * SPACE_UNIT;
-  static constexpr sim_t RADIUS_AGENT_SQUARED = RADIUS_AGENT * RADIUS_AGENT;
-  static constexpr sim_t RADIUS_FOOD_MIN = 0.5 * SPACE_UNIT;
-  static constexpr sim_t RADIUS_FOOD_MAX = 6.0 * SPACE_UNIT;
-  static constexpr sim_t RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<sim_t>::max());
-  static constexpr sim_t SPAWN_RADIUS_MIN = 10.0 * SPACE_UNIT;
-  static constexpr sim_t SPAWN_RADIUS_MAX = 999.0 * SPACE_UNIT;
-  static constexpr sim_t SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<sim_t>::max());
-  static constexpr sim_t SPAWN_RADIUS_DELTA =
-      SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
-  static constexpr sim_t SPEED_AGENT_MOVE = 5.0 * SPACE_UNIT;
-  static constexpr sim_t SPEED_AGENT_SPRINT = 10.0 * SPACE_UNIT;
-  static constexpr sim_t SPEED_FOOD_MOVE = 1.0 * SPACE_UNIT;
-  static constexpr sim_t UNIT_MIN_DELTA = std::nextafter(ONE, std::numeric_limits<sim_t>::max());
-  static constexpr size_t VIEW_RAYS = 1024;
-  static constexpr sim_t VIEW_RAYS_ANGLE_RANGE =
-      std::numbers::pi / 4.0; // 45deg
-  static constexpr sim_t VIEW_RAYS_ANGLE_DELTA =
-      VIEW_RAYS_ANGLE_RANGE / static_cast<sim_t>(VIEW_RAYS);
+  static constexpr double SPACE_UNIT = 0.0001; // used below
+  static constexpr int32_t AGENT_POS_X = 0;
+  static constexpr int32_t AGENT_POS_Y = 1;
+  static constexpr int32_t AGENT_DIR_X = 2;
+  static constexpr int32_t AGENT_DIR_Y = 3;
+  static constexpr int32_t AGENT_RADIUS = 4;
+  static constexpr int32_t AGENT_ENERGY = 5;
+  static constexpr int32_t AGENT_SPEED = 6;
+  static constexpr double ENERGY_CONSUMPTION_FOOD_IDLE = 0.5;
+  static constexpr double ENERGY_CONSUMPTION_FOOD_MOVE = 1.0;
+  static constexpr double ENERGY_CONSUMPTION_AGENT_IDLE = 1.0;
+  static constexpr double ENERGY_CONSUMPTION_AGENT_MOVE = 1.0;
+  static constexpr double ENERGY_CONSUMPTION_AGENT_ROTATION = 2.0 / std::numbers::pi;
+  static constexpr double ENERGY_CONSUMPTION_AGENT_SPRINT = 15.0;
+  static constexpr double ENERGY_GAIN_FOOD = 1000.0;
+  static constexpr double ENERGY_START_AGENT = 10000.0;
+  static constexpr double ENERGY_START_FOOD = 1000.0;
+  static constexpr double INTENSITY_MAX = 999.0 * SPACE_UNIT;
+  static constexpr double INTENSITY_MAX_INV_NEG = -1.0 / INTENSITY_MAX;
+  static constexpr int32_t NUM_FOOD_PER_AGENT = 8192;
+  static constexpr double RADIUS_AGENT = 2.0 * SPACE_UNIT;
+  static constexpr double RADIUS_AGENT_SQUARED = RADIUS_AGENT * RADIUS_AGENT;
+  static constexpr double RADIUS_FOOD_MIN = 0.5 * SPACE_UNIT;
+  static constexpr double RADIUS_FOOD_MAX = 6.0 * SPACE_UNIT;
+  static constexpr double RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<double>::max());
+  static constexpr double SPAWN_RADIUS_MIN = 10.0 * SPACE_UNIT;
+  static constexpr double SPAWN_RADIUS_MAX = 999.0 * SPACE_UNIT;
+  static constexpr double SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<double>::max());
+  static constexpr double SPAWN_RADIUS_DELTA = SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
+  static constexpr double SPEED_AGENT_MOVE = 5.0 * SPACE_UNIT;
+  static constexpr double SPEED_AGENT_SPRINT = 10.0 * SPACE_UNIT;
+  static constexpr double SPEED_FOOD_MOVE = 1.0 * SPACE_UNIT;
+  static constexpr double UNIT_MIN_DELTA = std::nextafter(1.0, std::numeric_limits<double>::max());
+  static constexpr int32_t VIEW_RAYS = 1024;
+  static constexpr double VIEW_RAYS_ANGLE_RANGE = std::numbers::pi / 4.0; // 45deg
+  static constexpr double VIEW_RAYS_ANGLE_DELTA = VIEW_RAYS_ANGLE_RANGE / static_cast<double>(VIEW_RAYS);
   // Start negative side up by 1 delta to account for an even number of rays as
   // we want to ensure the forward direction is represented.
-  static constexpr sim_t VIEW_RAYS_ANGLE_START =
-      -(VIEW_RAYS_ANGLE_RANGE / 2.0) + VIEW_RAYS_ANGLE_DELTA;
-  static constexpr sim_t VIEW_DISTANCE = 500.0 * SPACE_UNIT;
+  static constexpr double VIEW_RAYS_ANGLE_START = -(VIEW_RAYS_ANGLE_RANGE / 2.0) + VIEW_RAYS_ANGLE_DELTA;
+  static constexpr double VIEW_DISTANCE = 500.0 * SPACE_UNIT;
   // Based on counterclockwise rotation sweeping from left to right.
-  alignas(64) static const std::array<sim_t, VIEW_RAYS> COS_ANGLES;
-  alignas(64) static const std::array<sim_t, VIEW_RAYS> SIN_ANGLES;
+  alignas(64) static const std::array<double, VIEW_RAYS> COS_ANGLES;
+  alignas(64) static const std::array<double, VIEW_RAYS> SIN_ANGLES;
 
 protected:
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_pos_x;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_pos_y;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_dir_x;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_dir_y;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_radius;
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> food_energy;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_pos_x;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_pos_y;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_dir_x;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_dir_y;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_radius;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> food_energy;
   // extra for growth and alignment
-  alignas(64) std::array<sim_t, 16> agent_info;
-  alignas(64) std::array<sim_t, VIEW_RAYS> agent_view;
+  alignas(64) std::array<double, 16> agent_info;
+  alignas(64) std::array<double, VIEW_RAYS> agent_view;
 private:
   // partial results used during calculations.
-  alignas(64) std::array<sim_t, NUM_FOOD_PER_AGENT> collision_check;
-  alignas(64) std::array<sim_t, VIEW_RAYS> rays_dx;
-  alignas(64) std::array<sim_t, VIEW_RAYS> rays_dy;
-  alignas(64) std::array<sim_t, VIEW_RAYS> working_agent_view;
+  alignas(64) std::array<double, NUM_FOOD_PER_AGENT> collision_check;
+  alignas(64) std::array<double, VIEW_RAYS> rays_dx;
+  alignas(64) std::array<double, VIEW_RAYS> rays_dy;
+  alignas(64) std::array<double, VIEW_RAYS> working_agent_view;
 protected:
-  std::mt19937_64 rng; // multithreading/distributed compute
+  std::mt19937_64 rng; // each simulation owns its own generator
 
 public:
-  Sim2DCircles(void) noexcept {}
+  Sim2DCircles(void) noexcept = default;
   Sim2DCircles(const Sim2DCircles&) = delete;
   Sim2DCircles(const Sim2DCircles&&) = delete;
   Sim2DCircles& operator=(const Sim2DCircles&) = delete;
   Sim2DCircles& operator=(const Sim2DCircles&&) = delete;
-  virtual ~Sim2DCircles(void) {}
+  virtual ~Sim2DCircles(void) = default;
 
-  static std::unique_ptr<Interface> Create(
-      jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
-  sim_t LuminescenceValue(sim_t v);
-  virtual void Step(void) override;
+  static std::unique_ptr<Interface> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+  double LuminescenceValue(double v) noexcept;
+  virtual void Step(void) noexcept override;
+  virtual void StepN(int32_t num_steps) noexcept override;
 
 protected:
-  void CreateFood(size_t index);
-  sim_t GenUnit(void);
-  sim_t GenRadius(void);
-  sim_t GenSpawnRadius(void);
+  void InitializeAgent(void) noexcept;
+  void InitializeFood(int32_t index) noexcept;
+  double GenUnit(void) noexcept;
+  double GenRadius(void) noexcept;
+  double GenSpawnRadius(void) noexcept;
 };
 
 
-const std::array<sim_t, Sim2DCircles::VIEW_RAYS> Sim2DCircles::COS_ANGLES{
+const std::array<double, Sim2DCircles::VIEW_RAYS> Sim2DCircles::COS_ANGLES{
   []() constexpr {
-    std::array<sim_t, VIEW_RAYS> x{};
-    for (size_t i = 0; i<VIEW_RAYS; ++i) {
-      x[i] = std::cos(VIEW_RAYS_ANGLE_START + (i * VIEW_RAYS_ANGLE_DELTA));
+    std::array<double, VIEW_RAYS> x{};
+    for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+      x[index] = std::cos(VIEW_RAYS_ANGLE_START + (static_cast<double>(index) * VIEW_RAYS_ANGLE_DELTA));
     }
     return x;
   }()};
 
 
-const std::array<sim_t, Sim2DCircles::VIEW_RAYS> Sim2DCircles::SIN_ANGLES{
+const std::array<double, Sim2DCircles::VIEW_RAYS> Sim2DCircles::SIN_ANGLES{
   []() constexpr {
-    std::array<sim_t, VIEW_RAYS> x{};
-    for (size_t i = 0; i<VIEW_RAYS; ++i) {
-      x[i] = std::sin(VIEW_RAYS_ANGLE_START + (i * VIEW_RAYS_ANGLE_DELTA));
+    std::array<double, VIEW_RAYS> x{};
+    for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+      x[index] = std::sin(VIEW_RAYS_ANGLE_START + (static_cast<double>(index) * VIEW_RAYS_ANGLE_DELTA));
     }
     return x;
   }()};
 
 
-std::unique_ptr<Interface> Sim2DCircles::Create(
-    jms::utils::random_helper::optional_seed_input_t seed) {
+std::unique_ptr<Interface> Sim2DCircles::Create(jms::utils::random_helper::optional_seed_input_t seed) {
   std::unique_ptr<Sim2DCircles> sim{new Sim2DCircles{}};
   jms::utils::random_helper::SetSeed_mt19937_64(sim->rng, seed);
-  std::generate_n(sim->food_pos_x.begin(), NUM_FOOD_PER_AGENT,
-                  [&sim]() { return sim->GenUnit(); });
-  std::generate_n(sim->food_pos_y.begin(), NUM_FOOD_PER_AGENT,
-                  [&sim]() { return sim->GenUnit(); });
-  std::generate_n(sim->food_dir_x.begin(), NUM_FOOD_PER_AGENT,
-                  [&sim]() { return sim->GenUnit(); });
-  std::generate_n(sim->food_dir_y.begin(), NUM_FOOD_PER_AGENT,
-                  [&sim]() { return sim->GenUnit(); });
-  std::generate_n(sim->food_radius.begin(), NUM_FOOD_PER_AGENT,
-                  [&sim]() { return sim->GenRadius(); });
-  std::fill_n(sim->food_energy.begin(), NUM_FOOD_PER_AGENT, ENERGY_START_FOOD);
-  // start as "center of the world"
-  sim->agent_info[AGENT_POS_X] = ZERO;
-  sim->agent_info[AGENT_POS_Y] = ZERO;
-  sim->agent_info[AGENT_DIR_X] = sim->GenUnit();
-  sim->agent_info[AGENT_DIR_Y] = sim->GenUnit();
-  sim->agent_info[AGENT_RADIUS] = RADIUS_AGENT;
-  sim->agent_info[AGENT_ENERGY] = ENERGY_START_AGENT;
-  sim->agent_info[AGENT_SPEED] = ZERO;
-  // Normalize agent's direction
-  sim_t agent_len = std::sqrt(
-      sim->agent_info[AGENT_DIR_X] * sim->agent_info[AGENT_DIR_X] +
-      sim->agent_info[AGENT_DIR_Y] * sim->agent_info[AGENT_DIR_Y]);
-  if (agent_len == 0) { sim->agent_info[AGENT_DIR_Y] = 1.0; }
-  else {
-    sim->agent_info[AGENT_DIR_X] /= agent_len;
-    sim->agent_info[AGENT_DIR_Y] /= agent_len;
-  }
-  // Normalize food direction; normalize food position * spawn distance
-  for (size_t i=0; i<NUM_FOOD_PER_AGENT; ++i) {
-    sim_t dx = sim->food_dir_x[i];
-    sim_t dy = sim->food_dir_y[i];
-    sim_t dlen = std::sqrt(dx*dx + dy*dy);
-    if (dlen == 0) { sim->food_dir_y[i] = 1.0; }
-    else {
-      sim->food_dir_x[i] = dx / dlen;
-      sim->food_dir_y[i] = dy / dlen;
-    }
-    sim_t px = sim->food_pos_x[i];
-    sim_t py = sim->food_pos_y[i];
-    sim_t plen = std::sqrt(px*px + py*py);
-    sim_t spawn_distance = sim->GenSpawnRadius();
-    if (plen == 0) { sim->food_pos_y[i] = spawn_distance; }
-    else {
-      sim->food_pos_x[i] = (px / plen) * spawn_distance;
-      sim->food_pos_y[i] = (py / plen) * spawn_distance;
-    }
-  }
-  std::fill_n(sim->agent_view.begin(), VIEW_RAYS, ZERO);
+  sim->InitializeAgent();
+  for (int32_t index : std::ranges::iota_view {0, NUM_FOOD_PER_AGENT}) { sim->InitializeFood(index); }
+  std::fill_n(sim->agent_view.begin(), VIEW_RAYS, 0.0);
   return sim;
 }
 
 
-void Sim2DCircles::CreateFood(size_t index) {
-  sim_t px = GenUnit();
-  sim_t py = GenUnit();
-  sim_t plen = std::sqrt(px * px + py * py);
-  sim_t spawn_distance = GenSpawnRadius();
+double Sim2DCircles::GenUnit(void) noexcept {
+  std::uniform_real_distribution<double> dist(-1.0, 1.0 + UNIT_MIN_DELTA);
+  return dist(rng);
+};
+
+
+double Sim2DCircles::GenRadius() noexcept {
+  std::uniform_real_distribution<double> dist(RADIUS_FOOD_MIN, RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
+  return dist(rng);
+}
+
+
+double Sim2DCircles::GenSpawnRadius() noexcept {
+  std::uniform_real_distribution<double> dist(SPAWN_RADIUS_MIN, SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
+  return dist(rng);
+}
+
+
+void Sim2DCircles::InitializeAgent(void) noexcept {
+  double dx = GenUnit();
+  double dy = GenUnit();
+  double dlen = std::sqrt(std::fma(dx, dx, dy * dy));
+  agent_info[AGENT_POS_X] = 0.0;
+  agent_info[AGENT_POS_Y] = 0.0;
+  if (dlen == 0.0) {
+    agent_info[AGENT_DIR_X] = 0.0;
+    agent_info[AGENT_DIR_Y] = 1.0;
+  } else {
+    agent_info[AGENT_DIR_X] = dx / dlen;
+    agent_info[AGENT_DIR_Y] = dy / dlen;
+  }
+  agent_info[AGENT_RADIUS] = RADIUS_AGENT;
+  agent_info[AGENT_ENERGY] = ENERGY_START_AGENT;
+  agent_info[AGENT_SPEED] = 0.0;
+  return;
+}
+
+
+void Sim2DCircles::InitializeFood(int32_t index) noexcept {
+  double px = GenUnit();
+  double py = GenUnit();
+  double plen = std::sqrt(std::fma(px, px, py * py));
+  double spawn_distance = GenSpawnRadius();
+  double dx = GenUnit();
+  double dy = GenUnit();
+  double dlen = std::sqrt(std::fma(dx , dx, dy * dy));
   // place relative to the agent
-  if (plen == 0) {
+  if (plen == 0.0) {
     food_pos_x[index] = agent_info[AGENT_POS_X];
     food_pos_y[index] = spawn_distance + agent_info[AGENT_POS_Y];
   } else {
-    food_pos_x[index] = (px / plen) * spawn_distance + agent_info[AGENT_POS_X];
-    food_pos_y[index] = (py / plen) * spawn_distance + agent_info[AGENT_POS_Y];
+    food_pos_x[index] = std::fma(px / plen, spawn_distance, agent_info[AGENT_POS_X]);
+    food_pos_y[index] = std::fma(py / plen, spawn_distance, agent_info[AGENT_POS_Y]);
   }
-  sim_t dx = GenUnit();
-  sim_t dy = GenUnit();
-  sim_t dlen = std::sqrt(dx * dx + dy * dy);
-  if (dlen == 0) {
-    food_dir_x[index] = 0;
-    food_dir_y[index] = 1;
+  if (dlen == 0.0) {
+    food_dir_x[index] = 0.0;
+    food_dir_y[index] = 1.0;
   } else {
     food_dir_x[index] = dx / dlen;
     food_dir_y[index] = dy / dlen;
@@ -221,207 +200,194 @@ void Sim2DCircles::CreateFood(size_t index) {
 }
 
 
-sim_t Sim2DCircles::GenUnit(void) {
-  std::uniform_real_distribution<sim_t> dist(NEG_ONE, ONE + UNIT_MIN_DELTA);
-  return dist(rng);
-};
-
-
-sim_t Sim2DCircles::GenRadius() {
-  std::uniform_real_distribution<sim_t> dist(RADIUS_FOOD_MIN,
-                                             RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA);
-  return dist(rng);
+double Sim2DCircles::LuminescenceValue(double v) noexcept {
+  //return (v > INTENSITY_MAX) ? 0.0 : (1.0 - (v / INTENSITY_MAX));
+  // 1 - v / IM = 1 - v * (1/IM) = -(v * (1/IM)) + 1 = -v * (1/IM) + 1 = v * (-1/IM) + 1
+  return (v > INTENSITY_MAX) ? 0.0 : std::fma(v, INTENSITY_MAX_INV_NEG, 1.0);
 }
 
 
-sim_t Sim2DCircles::GenSpawnRadius() {
-  std::uniform_real_distribution<sim_t> dist(SPAWN_RADIUS_MIN,
-                                             SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA);
-  return dist(rng);
-}
-
-
-sim_t Sim2DCircles::LuminescenceValue(sim_t v) {
-  return (v > INTENSITY_MAX) ? 0 : (ONE - (v / INTENSITY_MAX));
-}
-
-
-void Sim2DCircles::Step(void) {
+void Sim2DCircles::Step(void) noexcept {
   /***
    * Process-
    * for each food
    *   1. Check for possible intersections
-   *   2. Check for agent/food collision and food out of energy (create new)
+   *   2. For each possible collision, check for agent/food collision and food out of energy (create new)
    *   3. Update agent_view
    *   4. Move food
    *   5. Create agent view
    * Update agent
    */
   // Load agent info.
-  sim_t px_a = agent_info[AGENT_POS_X];
-  sim_t py_a = agent_info[AGENT_POS_Y];
-  sim_t dx_a = agent_info[AGENT_DIR_X];
-  sim_t dy_a = agent_info[AGENT_DIR_Y];
-  sim_t r_a = agent_info[AGENT_RADIUS];
-  sim_t energy_a = agent_info[AGENT_ENERGY];
-  sim_t speed_a = agent_info[AGENT_SPEED];
+  double px_a = agent_info[AGENT_POS_X];
+  double py_a = agent_info[AGENT_POS_Y];
+  double dx_a = agent_info[AGENT_DIR_X];
+  double dy_a = agent_info[AGENT_DIR_Y];
+  double r_a = agent_info[AGENT_RADIUS];
+  double energy_a = agent_info[AGENT_ENERGY];
+  double speed_a = agent_info[AGENT_SPEED];
 
-  // High level (initial) check for food/agent collision
-  sim_t H = speed_a / 2;
-  sim_t I = SPEED_FOOD_MOVE / 2;
-  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
+  // High level (initial) check for food/agent collision by creating representative circles
+  // for each circle that covers the distance covered in this step.
+  double H = speed_a * 0.5;
+  double I = SPEED_FOOD_MOVE * 0.5;
+  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
     // Load food information
-    sim_t px_f = food_pos_x[index];
-    sim_t py_f = food_pos_y[index];
-    sim_t dx_f = food_dir_x[index];
-    sim_t dy_f = food_dir_y[index];
-    sim_t r_f = food_radius[index];
+    double px_f = food_pos_x[index];
+    double py_f = food_pos_y[index];
+    double dx_f = food_dir_x[index];
+    double dy_f = food_dir_y[index];
+    double r_f = food_radius[index];
 
-    sim_t A = px_f - px_a;
-    sim_t C = py_f - py_a;
-    sim_t E = r_f + r_a;
-    sim_t J = I * dx_f - H * dx_a;
-    sim_t K = I * dy_f - H * dy_a;
+    double A = px_f - px_a;
+    double C = py_f - py_a;
+    double E = r_f + r_a;
+    double J = std::fma(I, dx_f, -H * dx_a); // I * dx_f - H * dx_a
+    double K = std::fma(I, dy_f, -H * dy_a); // I * dy_f - H * dy_a
 
     // Test for possible intersection
-    sim_t fx = A + J;
-    sim_t fy = C + K;
-    sim_t f_2 = fx * fx + fy * fy;
-    sim_t f_distance = E + H + I;
-    collision_check[index] = f_distance - f_2;
+    double fx = A + J;
+    double fy = C + K;
+    double f_2 = std::fma(fx, fx, fy * fy);
+    double f_distance = E + H + I;
+    // ||M1M2||^2 <= (R_M1 + R_M2)^2  ->  (R_M1 + R_M2)^2 - ||M1M2||^2 >= 0 -> collision
+    collision_check[index] = std::fma(f_distance, f_distance, -f_2);
   }
 
   // For possible collisions, determine if an actual collision occurred
-  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
-    sim_t energy_f = food_energy[index];
+  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+    double energy_f = food_energy[index];
 
-    if (collision_check[index] >= 0) {
+    if (collision_check[index] >= 0.0) {
       // Load food information
-      sim_t px_f = food_pos_x[index];
-      sim_t py_f = food_pos_y[index];
-      sim_t dx_f = food_dir_x[index];
-      sim_t dy_f = food_dir_y[index];
-      sim_t r_f = food_radius[index];
+      double px_f = food_pos_x[index];
+      double py_f = food_pos_y[index];
+      double dx_f = food_dir_x[index];
+      double dy_f = food_dir_y[index];
+      double r_f = food_radius[index];
 
       // Reused calculations
-      sim_t A = px_f - px_a;
-      sim_t B = dx_f - dx_a;
-      sim_t C = py_f - py_a;
-      sim_t D = dy_f - dy_a;
-      sim_t E = r_f + r_a;
-      sim_t F = E * E;
+      double A = px_f - px_a;
+      double B = dx_f - dx_a;
+      double C = py_f - py_a;
+      double D = dy_f - dy_a;
+      double E = r_f + r_a;
+      double F = E * E;
 
       // Check for intersection in motion
-      sim_t a = B * B + D * D;
-      sim_t b_partial = A * B + C * D;
-      sim_t c = A * A + C * C - F;
-      sim_t discriminant = fma(b_partial, b_partial, -a * c);
-      if (discriminant > 0) {
-        sim_t q = -(b_partial +
+      double a = B * B + D * D;
+      double b_partial = A * B + C * D;
+      double c = A * A + C * C - F;
+      double discriminant = std::fma(b_partial, b_partial, -a * c);
+      if (discriminant > 0.0) {
+        double q = -(b_partial +
                     std::copysign(std::sqrt(discriminant), b_partial));
-        sim_t t1 = q / a;
-        sim_t t2 = c / q;
-        if (t1 >= 0 or t2 >= 0) {
+        double t1 = q / a;
+        double t2 = c / q;
+        if (t1 >= 0.0 or t2 >= 0.0) {
           // collision
           energy_a += ENERGY_GAIN_FOOD;
-          CreateFood(index);
+          // agent just consumed food, so "generate" a new one (reuse data structure)
+          InitializeFood(index);
           continue;
         }
       }
     }
-    if (energy_f - ENERGY_CONSUMPTION_FOOD_MOVE <= 0) {
-      CreateFood(index);
+    // Food out of energy, so "generate" a new one (reuse data structure)
+    if (energy_f - ENERGY_CONSUMPTION_FOOD_MOVE <= 0.0) {
+      InitializeFood(index);
     }
   }
 
   // Update agent
-  if (speed_a > 0) {
-    px_a = fma(speed_a, dx_a, px_a);
-    py_a = fma(speed_a, dy_a, py_a);
+  if (speed_a > 0.0) {
+    px_a = std::fma(speed_a, dx_a, px_a);
+    py_a = std::fma(speed_a, dy_a, py_a);
     agent_info[AGENT_POS_X] = px_a;
     agent_info[AGENT_POS_Y] = py_a;
   }
   agent_info[AGENT_ENERGY] = energy_a;
 
   // Move food
-  for (size_t index=0; index<NUM_FOOD_PER_AGENT; ++index) {
+  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
     // Load food information
-    sim_t px_f = food_pos_x[index];
-    sim_t py_f = food_pos_y[index];
-    sim_t dx_f = food_dir_x[index];
-    sim_t dy_f = food_dir_y[index];
-    sim_t r_f = food_radius[index];
-    sim_t energy_f = food_energy[index];
+    double px_f = food_pos_x[index];
+    double py_f = food_pos_y[index];
+    double dx_f = food_dir_x[index];
+    double dy_f = food_dir_y[index];
+    double r_f = food_radius[index];
+    double energy_f = food_energy[index];
 
     // Update food position
-    food_pos_x[index] = fma(SPEED_FOOD_MOVE, dx_f, px_f);
-    food_pos_y[index] = fma(SPEED_FOOD_MOVE, dy_f, py_f);
+    food_pos_x[index] = std::fma(SPEED_FOOD_MOVE, dx_f, px_f);
+    food_pos_y[index] = std::fma(SPEED_FOOD_MOVE, dy_f, py_f);
+    // should never be less than zero; checked above and reinitialized above.
     food_energy[index] = energy_f - ENERGY_CONSUMPTION_FOOD_MOVE;
   }
 
   // Generate agent view
-  for (size_t index=0; index<VIEW_RAYS; ++index) {
-    sim_t cos_t = COS_ANGLES[index];
-    sim_t sin_t = SIN_ANGLES[index];
-    rays_dx[index] = dx_a * cos_t - dy_a * sin_t;
-    rays_dy[index] = dx_a * sin_t + dy_a * cos_t;
+  for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+    double cos_t = COS_ANGLES[index];
+    double sin_t = SIN_ANGLES[index];
+    rays_dx[index] = std::fma(dx_a, cos_t, -dy_a * sin_t);
+    rays_dy[index] = std::fma(dx_a, sin_t, dy_a * cos_t);
   }
-  std::fill_n(working_agent_view.begin(), VIEW_RAYS, MAX_VALUE);
+  std::fill_n(working_agent_view.begin(), VIEW_RAYS, std::numeric_limits<double>::max());
 
   // Slowest unit of this function by a few orders of magnitude.
-  for (size_t food_index=0; food_index<NUM_FOOD_PER_AGENT; ++food_index) {
+  for (int32_t food_index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
     // Load food information
-    sim_t px_f = food_pos_x[food_index];
-    sim_t py_f = food_pos_y[food_index];
-    sim_t dx_f = food_dir_x[food_index];
-    sim_t dy_f = food_dir_y[food_index];
-    sim_t r_f = food_radius[food_index];
+    double px_f = food_pos_x[food_index];
+    double py_f = food_pos_y[food_index];
+    double dx_f = food_dir_x[food_index];
+    double dy_f = food_dir_y[food_index];
+    double r_f = food_radius[food_index];
 
-    sim_t A = px_a - px_f;
-    sim_t C = py_a - py_f;
-    sim_t F = r_f * r_f;
-    sim_t G = A * A + C * C - F;
-    sim_t H = -G;
+    double A = px_a - px_f;
+    double C = py_a - py_f;
+    double F = r_f * r_f;
+    double G = std::fma(A, A, C * C) - F;
+    double H = -G;
 
     // test if food is touching ends or in the middle of view range.
     // left
-    sim_t rays_dx_l = rays_dx[0];
-    sim_t rays_dy_l = rays_dy[0];
-    sim_t b_partial_l = A * rays_dx_l + C * rays_dy_l;
-    sim_t discriminant_l = fma(b_partial_l, b_partial_l, H);
+    double rays_dx_l = rays_dx[0];
+    double rays_dy_l = rays_dy[0];
+    double b_partial_l = std::fma(A, rays_dx_l, C * rays_dy_l);
+    double discriminant_l = std::fma(b_partial_l, b_partial_l, H);
     // right
-    sim_t rays_dx_r = rays_dx[VIEW_RAYS - 1];
-    sim_t rays_dy_r = rays_dy[VIEW_RAYS - 1];
-    sim_t b_partial_r = A * rays_dx_r + C * rays_dy_r;
-    sim_t discriminant_r = fma(b_partial_r, b_partial_r, H);
-    if (discriminant_l < 0 && discriminant_r < 0) { // no intersection
-      sim_t af_x = px_f - px_a;
-      sim_t af_y = py_f - py_a;
+    double rays_dx_r = rays_dx[VIEW_RAYS - 1];
+    double rays_dy_r = rays_dy[VIEW_RAYS - 1];
+    double b_partial_r = std::fma(A, rays_dx_r, C * rays_dy_r);
+    double discriminant_r = std::fma(b_partial_r, b_partial_r, H);
+    if (discriminant_l < 0.0 && discriminant_r < 0.0) { // no intersection
+      double af_x = px_f - px_a;
+      double af_y = py_f - py_a;
       // ax * by - ay * bx : a == ray; b == af (agent to food vector; f - a)
-      sim_t dir_l = rays_dx_l * af_y - rays_dy_l * af_x;
-      sim_t dir_r = rays_dx_r * af_y - rays_dy_r * af_x;
+      double dir_l = std::fma(rays_dx_l, af_y, -rays_dy_l * af_x);
+      double dir_r = std::fma(rays_dx_r, af_y, -rays_dy_r * af_x);
       // in between = dir_l <= 0 (to the right) && dir_r >= 0 (to the left)
       // check for not between
-      if (dir_l > 0 || dir_r < 0) {
+      if (dir_l > 0.0 || dir_r < 0.0) {
         continue;
       }
     }
 
-    for (size_t ray_index=0; ray_index<VIEW_RAYS; ++ray_index) {
-      // sim_t a = ONE;
-      sim_t b_partial = A * rays_dx[ray_index] + C * rays_dy[ray_index];
-      sim_t discriminant = fma(b_partial, b_partial, H);
-      if (discriminant >= 0) {
-        sim_t ray_distance = working_agent_view[ray_index];
-        sim_t x = ray_distance;
+    for (int32_t ray_index : std::ranges::iota_view{0, VIEW_RAYS}) {
+      // double a = 1.0;
+      double b_partial = std::fma(A, rays_dx[ray_index], C * rays_dy[ray_index]);
+      double discriminant = std::fma(b_partial, b_partial, H);
+      if (discriminant >= 0.0) {
+        double ray_distance = working_agent_view[ray_index];
+        double x = ray_distance;
         // x1 = q / a -> q / 1 -> q
-        sim_t x1 = -(-b_partial +
+        double x1 = -(-b_partial +
                     std::copysign(std::sqrt(discriminant), -b_partial));
         if (x1 > RADIUS_AGENT && x1 < x) {
           x = x1;
         }
-        if (x1 != 0) {
-          sim_t x2 = G / x1;
+        if (x1 != 0.0) {
+          double x2 = G / x1;
           if (x2 > RADIUS_AGENT && x2 < x) {
             x = x2;
           }
@@ -433,7 +399,7 @@ void Sim2DCircles::Step(void) {
     }
   }
 
-  for (size_t index=0; index<VIEW_RAYS; ++index) {
+  for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
     agent_view[index] = LuminescenceValue(working_agent_view[index]);
   }
 
@@ -441,8 +407,15 @@ void Sim2DCircles::Step(void) {
 }
 
 
-std::unique_ptr<Interface> CreateSim2DCircles(
-    jms::utils::random_helper::optional_seed_input_t seed) {
+void Sim2DCircles::StepN(int32_t num_steps) noexcept {
+  for (auto i : std::ranges::iota_view{0, num_steps}) {
+    Step();
+  }
+  return;
+}
+
+
+std::unique_ptr<Interface> CreateSim2DCircles(jms::utils::random_helper::optional_seed_input_t seed) {
   return Sim2DCircles::Create(seed);
 }
 

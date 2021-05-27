@@ -16,8 +16,7 @@ using seed_input_t = std::vector<std::seed_seq::result_type>;
 using optional_seed_input_t = std::optional<seed_input_t>;
 
 
-void SetSeed_mt19937_64(std::mt19937_64& rng,
-                        optional_seed_input_t seed=std::nullopt);
+void SetSeed_mt19937_64(std::mt19937_64& rng, optional_seed_input_t seed=std::nullopt);
 
 
 } // namespace random_helper

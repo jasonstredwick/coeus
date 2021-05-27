@@ -3,19 +3,17 @@
 
 
 #include <memory>
-#include <optional>
-#include <random>
 
-#include "jms/utils/random_helper.h"
 #include "jms/sim/interface.h"
+#include "jms/utils/random_helper.h"
 
 
 namespace jms {
 namespace sim {
 
 
-std::unique_ptr<Interface> CreateSim2DCircles(
-    jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+std::unique_ptr<Interface> CreateSim2DCircles(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+std::unique_ptr<Interface> CreateSim2DCircles_f(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
 
 
 } // namespace sim
