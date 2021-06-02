@@ -44,9 +44,20 @@ void Help(std::optional<std::string> error_msg=std::nullopt) {
 }
 
 
+constexpr size_t BUFFER_DIM_Y = 1024;
+constexpr size_t BUFFER_DIM_X = 1024;
+constexpr float UNITS_WIDE = 3.0f;
+constexpr float UNITS_HIGH = 3.0f;
 void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_threads) {
   std::chrono::high_resolution_clock clock{};
   double total = 0.0;
+  int32_t num_buffers = 2;
+  int32_t current_buffer = 0;
+  std::vector<std::vector<std::vector<std::vector<uint8_t>>>> buffers{
+    2, std::vector<std::vector<std::vector<uint8_t>>>{
+    BUFFER_DIM_Y, std::vector<std::vector<uint8_t>>{
+    BUFFER_DIM_X, std::vector<uint8_t>{
+    0, 0, 0}}}};
 
   if (num_threads <= 1) {
     // run with no threading.
@@ -56,6 +67,7 @@ void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_thre
       for (auto& sim : sims) {
         sim->Step();
       }
+      sims[0]->Draw(buffers[current_buffer], UNITS_WIDE, UNITS_HIGH);
       auto dt1 = clock.now() - t1;
       fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
     }
@@ -87,6 +99,7 @@ void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_thre
       auto t1 = clock.now();
       executor.run(taskflow);
       executor.wait_for_all();
+      sims[0]->Draw(buffers[current_buffer], UNITS_WIDE, UNITS_HIGH);
       auto dt1 = clock.now() - t1;
       fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
     }
@@ -183,3 +196,19 @@ int main(int argc, char** argv) {
   }
   return 0;
 }
+
+
+/*
+inline constexpr size_t BUFFER_DIM = 1024;
+inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
+inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
+inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
+*/
+
+
+/*
+inline constexpr size_t BUFFER_DIM = 1024;
+inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
+inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
+inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
+*/

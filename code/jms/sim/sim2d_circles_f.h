@@ -3,6 +3,7 @@
 
 
 #include <numbers>
+#include <vector>
 
 #include "jms/utils/random_helper.h"
 
@@ -11,12 +12,6 @@ namespace jms {
 namespace sim {
 
 
-/*
-inline constexpr size_t BUFFER_DIM = 1024;
-inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
-inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
-inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
-*/
 class Sim2DCircles_f {
 public:
   static constexpr float SPACE_UNIT = 0.0001f; // used below
@@ -94,6 +89,7 @@ public:
   ~Sim2DCircles_f(void) = default;
 
   static std::unique_ptr<Sim2DCircles_f> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+  void Draw(std::vector<std::vector<std::vector<uint8_t>>>& grid, float units_wide, float units_high);
   void Step(void) noexcept;
 
 protected:
@@ -146,6 +142,38 @@ std::unique_ptr<Sim2DCircles_f> Sim2DCircles_f::Create(jms::utils::random_helper
   for (int32_t index : std::ranges::iota_view {0, NUM_FOOD_PER_AGENT}) { sim->InitializeFood(index); }
   std::fill_n(sim->agent_view.begin(), VIEW_RAYS, 0.0f);
   return sim;
+}
+
+
+void Sim2DCircles_f::Draw(std::vector<std::vector<std::vector<uint8_t>>>& grid, float units_wide, float units_high) {
+  int32_t dim_x = static_cast<int32_t>(grid[0].size());
+  int32_t dim_y = static_cast<int32_t>(grid.size());
+  int32_t dim_c = 3;
+  int32_t RED_INDEX = 0;
+  int32_t BLUE_INDEX = 2;
+  float t_dx = units_wide / 2.0f;
+  float t_dy = units_high / 2.0f;
+  float s_dx = static_cast<float>(dim_x) / units_wide;
+  float s_dy = static_cast<float>(dim_y) / units_high;
+  // px_new = (px + t_dx) * s_dx
+  // py_new = (py + t_dy) * s_dy
+  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+    float fx = food_pos_x[index];
+    float fy = food_pos_y[index];
+    float fgrid_x = static_cast<int32_t>((fx + t_dx) * s_dx);
+    float fgrid_y = static_cast<int32_t>((fy + t_dy) * s_dy);
+    if (fgrid_x >= 0 && fgrid_x < dim_x && fgrid_y >= 0 && fgrid_y < dim_y) {
+      grid[fgrid_y][fgrid_x][BLUE_INDEX] = 255;
+    }
+  }
+  float ax = agent_info[AGENT_POS_X];
+  float ay = agent_info[AGENT_POS_Y];
+  float agrid_x = static_cast<int32_t>((ax + t_dx) * s_dx);
+  float agrid_y = static_cast<int32_t>((ay + t_dy) * s_dy);
+  if (agrid_x >= 0 && agrid_x < dim_x && agrid_y >= 0 && agrid_y < dim_y) {
+    grid[agrid_y][agrid_x][RED_INDEX] = 255;
+  }
+  return;
 }
 
 
