@@ -7,18 +7,24 @@
 
 #include "fmt/core.h"
 #include "taskflow/taskflow.hpp"
+#include "SDL2/SDL.h"
 
 #include "jms/sim/sim2d_circles_d.h"
 #include "jms/sim/sim2d_circles_f.h"
+#include "jms/utils/viz/sdl2_renderer.h"
+#include "jms/utils/viz/color.h"
+#include "jms/utils/viz/point_render.h"
 
 
 namespace taskflow = tf;
 
 
-constexpr int32_t DEFAULT_AGENTS = 32;
-constexpr int32_t DEFAULT_STEPS = 1024;
-constexpr int32_t MAX_AGENTS = 1'000'000;
-constexpr int32_t MAX_STEPS = 1'000'000;
+constexpr size_t BUFFER_DIM_Y = 1024;
+constexpr size_t BUFFER_DIM_X = 1024;
+constexpr size_t DEFAULT_AGENTS = 32;
+constexpr size_t DEFAULT_STEPS = 1024;
+constexpr size_t MAX_AGENTS = 1'000'000;
+constexpr size_t MAX_STEPS = 1'000'000;
 
 
 struct ArgResults {
@@ -26,9 +32,17 @@ struct ArgResults {
   std::string msg {};
   bool use_double = false;
   bool use_threads = false;
-  int32_t num_agents {DEFAULT_AGENTS};
-  int32_t num_steps {DEFAULT_STEPS};
+  size_t num_agents {DEFAULT_AGENTS};
+  size_t num_steps {DEFAULT_STEPS};
   bool show_help {false};
+  bool use_viz {false};
+};
+
+
+template <typename T>
+struct VizInfo {
+  jms::utils::viz::SDL2Renderer renderer;
+  jms::utils::viz::PointRender<T> point_render;
 };
 
 
@@ -40,54 +54,74 @@ void Help(std::optional<std::string> error_msg=std::nullopt) {
   fmt::print("    --use-threads   Use threads; default=false\n");
   fmt::print("    --num-agents    Number of agents; default={}\n", DEFAULT_AGENTS);
   fmt::print("    --num-steps     Number of steps; default={}\n", DEFAULT_STEPS);
+  fmt::print("    --viz           Display visualization\n");
   return;
 }
 
 
-constexpr size_t BUFFER_DIM_Y = 1024;
-constexpr size_t BUFFER_DIM_X = 1024;
-constexpr float UNITS_WIDE = 3.0f;
-constexpr float UNITS_HIGH = 3.0f;
-void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_threads) {
+/*
+
+
+  jms::utils::viz::SDL2Renderer renderer {SCREEN_WIDTH, SCREEN_HEIGHT, SDL2Renderer::Options {.render_draw_color=SDL2Renderer::Color {.red=0xff, .green=0xff, .blue=0xff}}};
+  while (renderer.ProcessEventsOrQuit()) {
+    int result = renderer.Draw(img);
+    if (result) {
+      std::cout << "Failed to render image: " << result << std::endl;
+      break;
+    }
+  }
+*/
+
+void Draw(auto& renderer, auto& point_render, auto& sim) {
+  point_render.Clear();
+  auto pi = sim.GetPositionInfoAccess();
+  point_render.SetDrawColor(jms::utils::viz::COLOR_WHITE);
+  for (std::optional<auto> food = pi.NextFood(); food.has_value(); food = pi.NextFood()) {
+    auto pos = food.value();
+    point_render.DrawPoint(pos.x, pos.y);
+  }
+  auto agent_pos = pi.Agent();
+  point_render.SetDrawColor(jms::utils::viz::COLOR_RED);
+  point_render.DrawPoint(agent_pos.x, agent_pos.y);
+  renderer.Draw(point_render.Data());
+  return;
+}
+
+
+void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads, std::optional<auto> viz_info) {
   std::chrono::high_resolution_clock clock{};
   double total = 0.0;
-  int32_t num_buffers = 2;
-  int32_t current_buffer = 0;
-  std::vector<std::vector<std::vector<std::vector<uint8_t>>>> buffers{
-    2, std::vector<std::vector<std::vector<uint8_t>>>{
-    BUFFER_DIM_Y, std::vector<std::vector<uint8_t>>{
-    BUFFER_DIM_X, std::vector<uint8_t>{
-    0, 0, 0}}}};
 
   if (num_threads <= 1) {
     // run with no threading.
     auto t = clock.now();
-    for (int32_t i : std::ranges::iota_view{0, num_steps}) {
+    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
       auto t1 = clock.now();
       for (auto& sim : sims) {
         sim->Step();
       }
-      sims[0]->Draw(buffers[current_buffer], UNITS_WIDE, UNITS_HIGH);
-      auto dt1 = clock.now() - t1;
-      fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
+      auto t2 = clock.now();
+      if (viz_info.has_value()) { Draw(viz_info.value().renderer, viz_info.value().point_render, *sims[0]); }
+      auto t3 = clock.now();
+      //fmt::print("{}  --  {}\n", std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count(), std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count());
     }
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
   } else {
     // use threads.
-    int32_t unit_size = num_agents / num_threads; // extra accounted later
-    int32_t num_units = std::min(num_agents, num_threads);
-    int32_t extra = num_agents % num_threads;
+    size_t unit_size = num_agents / num_threads; // extra accounted later
+    size_t num_units = std::min(num_agents, num_threads);
+    size_t extra = num_agents % num_threads;
     fmt::print("Num units: {}\n", num_units);
     fmt::print("Unit size: {} ; extra: {}\n", unit_size, extra);
     taskflow::Executor executor(num_units);
     taskflow::Taskflow taskflow;
     size_t start = 0;
     size_t end = start + unit_size + (extra ? 1 : 0);
-    for (int32_t unit_index : std::ranges::iota_view{0, num_units}) {
+    for (size_t unit_index : std::ranges::iota_view {static_cast<size_t>(0), num_units}) {
       if (end > sims.size()) { end = sims.size(); }
       taskflow.emplace([&sims, start, end]() {
-        for (int32_t i : std::ranges::iota_view{start, end}) {
+        for (size_t i : std::ranges::iota_view {start, end}) {
           sims[i]->Step();
         }
       });
@@ -95,11 +129,10 @@ void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_thre
       end = start + unit_size + (unit_index + 1 < extra ? 1 : 0);
     }
     auto t = clock.now();
-    for (int32_t step : std::ranges::iota_view{0, num_steps}) {
+    for (size_t step : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
       auto t1 = clock.now();
       executor.run(taskflow);
       executor.wait_for_all();
-      sims[0]->Draw(buffers[current_buffer], UNITS_WIDE, UNITS_HIGH);
       auto dt1 = clock.now() - t1;
       fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
     }
@@ -116,11 +149,13 @@ void Process(auto& sims, int32_t num_agents, int32_t num_steps, int32_t num_thre
 ArgResults ProcessArgs(int argc, char** argv) {
   ArgResults results;
   try {
-    for (int32_t index=1; index<argc; ++index) {
+    for (size_t index=1; index<argc; ++index) {
       std::string arg {argv[index]};
       if (arg == "--help") {
         results.show_help = true;
         break;
+      } else if (!arg.compare("--viz")) {
+        results.use_viz = true;
       } else if (!arg.compare("--use-double")) {
         results.use_double = true;
       } else if (!arg.compare("--use-threads")) {
@@ -173,42 +208,45 @@ int main(int argc, char** argv) {
     return 0;
   }
   bool use_double = args.use_double;
-  int32_t num_agents = args.num_agents;
-  int32_t num_steps = args.num_steps;
-  int32_t num_threads = args.use_threads ? static_cast<int32_t>(std::thread::hardware_concurrency()) - 2 : 1; // -2 for master thread
+  bool use_viz = args.use_viz;
+  size_t num_agents = args.num_agents;
+  size_t num_steps = args.num_steps;
+  size_t num_threads = args.use_threads ? static_cast<size_t>(std::thread::hardware_concurrency()) - 2 : 1; // -2 for master thread
   fmt::print("RUN: {} {} {}\n", num_agents, num_threads, num_steps);
   if (num_agents < 0 || num_steps < 0) {
     return 0;
   }
 
   if (use_double) {
-    std::vector<std::unique_ptr<jms::sim::Sim2DCircles_d>> sims;
-    for (int32_t i : std::ranges::iota_view{0, num_agents}) {
-      sims.emplace_back(jms::sim::Sim2DCircles_d::Create());
+    std::optional<VizInfo<double>> viz_info;
+    if (use_viz) {
+      viz_info = VizInfo<double> {
+        .renderer=jms::utils::viz::SDL2Renderer {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::SDL2Renderer::Options {.title="Sim2DCircle", .render_draw_color=jms::utils::viz::COLOR_BLACK}},
+        .point_render=jms::utils::viz::PointRender<double> {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::COLOR_BLACK, jms::utils::viz::COLOR_WHITE}
+      };
+      double sr = jms::sim::Circles2D_d::SPAWN_RADIUS_MAX;
+      viz_info.value().point_render.ChangeTransformers(-sr, sr, -sr, sr);
     }
-    Process(sims, num_agents, num_steps, num_threads);
+    std::vector<std::unique_ptr<jms::sim::Circles2D_d::Sim>> sims;
+    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
+      sims.emplace_back(jms::sim::Circles2D_d::Sim::Create());
+    }
+    Process(sims, num_agents, num_steps, num_threads, std::move(viz_info));
   } else {
-    std::vector<std::unique_ptr<jms::sim::Sim2DCircles_f>> sims;
-    for (int32_t i : std::ranges::iota_view{0, num_agents}) {
-      sims.emplace_back(jms::sim::Sim2DCircles_f::Create());
+    std::optional<VizInfo<float>> viz_info;
+    if (use_viz) {
+      viz_info = VizInfo<float> {
+        .renderer=jms::utils::viz::SDL2Renderer {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::SDL2Renderer::Options {.title="Sim2DCircle", .render_draw_color=jms::utils::viz::COLOR_BLACK}},
+        .point_render=jms::utils::viz::PointRender<float> {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::COLOR_BLACK, jms::utils::viz::COLOR_WHITE}
+      };
+      float sr = jms::sim::Circles2D_f::SPAWN_RADIUS_MAX;
+      viz_info.value().point_render.ChangeTransformers(-sr, sr, -sr, sr);
     }
-    Process(sims, num_agents, num_steps, num_threads);
+    std::vector<std::unique_ptr<jms::sim::Circles2D_f::Sim>> sims;
+    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
+      sims.emplace_back(jms::sim::Circles2D_f::Sim::Create());
+    }
+    Process(sims, num_agents, num_steps, num_threads, std::move(viz_info));
   }
   return 0;
 }
-
-
-/*
-inline constexpr size_t BUFFER_DIM = 1024;
-inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
-inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
-inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
-*/
-
-
-/*
-inline constexpr size_t BUFFER_DIM = 1024;
-inline constexpr size_t BUFFER_HALF_DIM = BUFFER_DIM / 2;
-inline constexpr double SCALE_T = SPAWN_RADIUS_MAX / static_cast<int>(BUFFER_HALF_DIM);
-inline constexpr int SCALE = static_cast<int>(SCALE_T) + static_cast<int>(std::ceil(SCALE_T) - std::floor(SCALE_T));
-*/

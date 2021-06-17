@@ -2,7 +2,9 @@
 #define SIM2d_CIRCLES_F_H
 
 
+#include <iterator>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include "jms/utils/random_helper.h"
@@ -10,53 +12,87 @@
 
 namespace jms {
 namespace sim {
+namespace Circles2D_f {
 
 
-class Sim2DCircles_f {
+constexpr float SPACE_UNIT = 0.0001f; // used below
+constexpr size_t AGENT_POS_X = 0;
+constexpr size_t AGENT_POS_Y = 1;
+constexpr size_t AGENT_DIR_X = 2;
+constexpr size_t AGENT_DIR_Y = 3;
+constexpr size_t AGENT_RADIUS = 4;
+constexpr size_t AGENT_ENERGY = 5;
+constexpr size_t AGENT_SPEED = 6;
+constexpr float ENERGY_CONSUMPTION_FOOD_IDLE = 0.5f;
+constexpr float ENERGY_CONSUMPTION_FOOD_MOVE = 1.0f;
+constexpr float ENERGY_CONSUMPTION_AGENT_IDLE = 1.0f;
+constexpr float ENERGY_CONSUMPTION_AGENT_MOVE = 1.0f;
+constexpr float ENERGY_CONSUMPTION_AGENT_ROTATION = static_cast<float>(2.0 / std::numbers::pi);
+constexpr float ENERGY_CONSUMPTION_AGENT_SPRINT = 15.0f;
+constexpr float ENERGY_GAIN_FOOD = 1000.0f;
+constexpr float ENERGY_START_AGENT = 10000.0f;
+constexpr float ENERGY_START_FOOD = 1000.0f;
+constexpr float INTENSITY_MAX = 999.0f * SPACE_UNIT;
+constexpr float INTENSITY_MAX_INV_NEG = -1.0f / INTENSITY_MAX;
+constexpr size_t NUM_FOOD_PER_AGENT = 8192;
+constexpr float RADIUS_AGENT = 2.0f * SPACE_UNIT;
+constexpr float RADIUS_AGENT_SQUARED = RADIUS_AGENT * RADIUS_AGENT;
+constexpr float RADIUS_FOOD_MIN = 0.5f * SPACE_UNIT;
+constexpr float RADIUS_FOOD_MAX = 6.0f * SPACE_UNIT;
+constexpr float RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<float>::max());
+constexpr float RADIUS_FOOD_MAX_WITH_DELTA = RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA;
+constexpr float SPAWN_RADIUS_MIN = 10.0f * SPACE_UNIT;
+constexpr float SPAWN_RADIUS_MAX = 999.0f * SPACE_UNIT;
+constexpr float SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<float>::max());
+constexpr float SPAWN_RADIUS_MAX_WITH_DELTA = SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA;
+constexpr float SPAWN_RADIUS_DELTA = SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
+constexpr float SPEED_AGENT_MOVE = 5.0f * SPACE_UNIT;
+constexpr float SPEED_AGENT_SPRINT = 10.0f * SPACE_UNIT;
+constexpr float SPEED_FOOD_MOVE = 1.0f * SPACE_UNIT;
+constexpr float UNIT_MIN_DELTA = std::nextafter(1.0f, std::numeric_limits<float>::max());
+constexpr float UNIT_MAX_WITH_DELTA = 1.0f + UNIT_MIN_DELTA;
+constexpr size_t VIEW_RAYS = 1024;
+constexpr float VIEW_RAYS_ANGLE_RANGE = static_cast<float>(std::numbers::pi / 4.0); // 45deg
+constexpr float VIEW_RAYS_ANGLE_DELTA = VIEW_RAYS_ANGLE_RANGE / static_cast<float>(VIEW_RAYS);
+// Start negative side up by 1 delta to account for an even number of rays as
+// we want to ensure the forward direction is represented.
+constexpr float VIEW_RAYS_ANGLE_START = -(VIEW_RAYS_ANGLE_RANGE / 2.0f) + VIEW_RAYS_ANGLE_DELTA;
+constexpr float VIEW_DISTANCE = 500.0f * SPACE_UNIT;
+
+
+struct Position {
+  float x;
+  float y;
+};
+
+
+class PositionInfo {
+private:
+  const std::array<float, NUM_FOOD_PER_AGENT>& food_pos_x;
+  const std::array<float, NUM_FOOD_PER_AGENT>& food_pos_y;
+  const std::array<float, 16>& agent_info;
+  size_t index;
+
 public:
-  static constexpr float SPACE_UNIT = 0.0001f; // used below
-  static constexpr int32_t AGENT_POS_X = 0;
-  static constexpr int32_t AGENT_POS_Y = 1;
-  static constexpr int32_t AGENT_DIR_X = 2;
-  static constexpr int32_t AGENT_DIR_Y = 3;
-  static constexpr int32_t AGENT_RADIUS = 4;
-  static constexpr int32_t AGENT_ENERGY = 5;
-  static constexpr int32_t AGENT_SPEED = 6;
-  static constexpr float ENERGY_CONSUMPTION_FOOD_IDLE = 0.5f;
-  static constexpr float ENERGY_CONSUMPTION_FOOD_MOVE = 1.0f;
-  static constexpr float ENERGY_CONSUMPTION_AGENT_IDLE = 1.0f;
-  static constexpr float ENERGY_CONSUMPTION_AGENT_MOVE = 1.0f;
-  static constexpr float ENERGY_CONSUMPTION_AGENT_ROTATION = static_cast<float>(2.0 / std::numbers::pi);
-  static constexpr float ENERGY_CONSUMPTION_AGENT_SPRINT = 15.0f;
-  static constexpr float ENERGY_GAIN_FOOD = 1000.0f;
-  static constexpr float ENERGY_START_AGENT = 10000.0f;
-  static constexpr float ENERGY_START_FOOD = 1000.0f;
-  static constexpr float INTENSITY_MAX = 999.0f * SPACE_UNIT;
-  static constexpr float INTENSITY_MAX_INV_NEG = -1.0f / INTENSITY_MAX;
-  static constexpr int32_t NUM_FOOD_PER_AGENT = 8192;
-  static constexpr float RADIUS_AGENT = 2.0f * SPACE_UNIT;
-  static constexpr float RADIUS_AGENT_SQUARED = RADIUS_AGENT * RADIUS_AGENT;
-  static constexpr float RADIUS_FOOD_MIN = 0.5f * SPACE_UNIT;
-  static constexpr float RADIUS_FOOD_MAX = 6.0f * SPACE_UNIT;
-  static constexpr float RADIUS_FOOD_MIN_DELTA = std::nextafter(RADIUS_FOOD_MAX, std::numeric_limits<float>::max());
-  static constexpr float RADIUS_FOOD_MAX_WITH_DELTA = RADIUS_FOOD_MAX + RADIUS_FOOD_MIN_DELTA;
-  static constexpr float SPAWN_RADIUS_MIN = 10.0f * SPACE_UNIT;
-  static constexpr float SPAWN_RADIUS_MAX = 999.0f * SPACE_UNIT;
-  static constexpr float SPAWN_RADIUS_MIN_DELTA = std::nextafter(SPAWN_RADIUS_MAX, std::numeric_limits<float>::max());
-  static constexpr float SPAWN_RADIUS_MAX_WITH_DELTA = SPAWN_RADIUS_MAX + SPAWN_RADIUS_MIN_DELTA;
-  static constexpr float SPAWN_RADIUS_DELTA = SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN;
-  static constexpr float SPEED_AGENT_MOVE = 5.0f * SPACE_UNIT;
-  static constexpr float SPEED_AGENT_SPRINT = 10.0f * SPACE_UNIT;
-  static constexpr float SPEED_FOOD_MOVE = 1.0f * SPACE_UNIT;
-  static constexpr float UNIT_MIN_DELTA = std::nextafter(1.0f, std::numeric_limits<float>::max());
-  static constexpr float UNIT_MAX_WITH_DELTA = 1.0f + UNIT_MIN_DELTA;
-  static constexpr int32_t VIEW_RAYS = 1024;
-  static constexpr float VIEW_RAYS_ANGLE_RANGE = static_cast<float>(std::numbers::pi / 4.0); // 45deg
-  static constexpr float VIEW_RAYS_ANGLE_DELTA = VIEW_RAYS_ANGLE_RANGE / static_cast<float>(VIEW_RAYS);
-  // Start negative side up by 1 delta to account for an even number of rays as
-  // we want to ensure the forward direction is represented.
-  static constexpr float VIEW_RAYS_ANGLE_START = -(VIEW_RAYS_ANGLE_RANGE / 2.0f) + VIEW_RAYS_ANGLE_DELTA;
-  static constexpr float VIEW_DISTANCE = 500.0f * SPACE_UNIT;
+  PositionInfo(const std::array<float, NUM_FOOD_PER_AGENT>& food_pos_x,
+               const std::array<float, NUM_FOOD_PER_AGENT>& food_pos_y,
+               const std::array<float, 16>& agent_info)
+  : food_pos_x(food_pos_x), food_pos_y(food_pos_y), agent_info(agent_info), index(0) {
+    return;
+  }
+
+  Position Agent(void) const noexcept { return Position {.x=agent_info[AGENT_POS_X], .y=agent_info[AGENT_POS_Y]}; }
+  std::optional<Position> NextFood(void) noexcept {
+    if (index >= NUM_FOOD_PER_AGENT) { return std::optional<Position>(); }
+    index++;
+    return std::optional<Position>(Position {.x=food_pos_x[index-1], .y=food_pos_y[index-1]});
+  }
+  void ResetFood(void) noexcept { index = 0; return; }
+};
+
+
+class Sim {
+public:
   // Based on counterclockwise rotation sweeping from left to right.
   alignas(64) static const std::array<float, VIEW_RAYS> COS_ANGLES;
   alignas(64) static const std::array<float, VIEW_RAYS> SIN_ANGLES;
@@ -81,15 +117,15 @@ protected:
   std::mt19937_64 rng; // each simulation owns its own generator
 
 public:
-  Sim2DCircles_f(void) noexcept = default;
-  Sim2DCircles_f(const Sim2DCircles_f&) = delete;
-  Sim2DCircles_f(const Sim2DCircles_f&&) = delete;
-  Sim2DCircles_f& operator=(const Sim2DCircles_f&) = delete;
-  Sim2DCircles_f& operator=(const Sim2DCircles_f&&) = delete;
-  ~Sim2DCircles_f(void) = default;
+  Sim(void) noexcept = default;
+  Sim(const Sim&) = delete;
+  Sim(Sim&&) noexcept = default;
+  ~Sim(void) noexcept = default;
+  Sim& operator=(const Sim&) = delete;
+  Sim& operator=(Sim&&) noexcept = default;
 
-  static std::unique_ptr<Sim2DCircles_f> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
-  void Draw(std::vector<std::vector<std::vector<uint8_t>>>& grid, float units_wide, float units_high);
+  static std::unique_ptr<Sim> Create(jms::utils::random_helper::optional_seed_input_t seed=std::nullopt);
+  PositionInfo GetPositionInfoAccess(void) const noexcept { return PositionInfo {food_pos_x, food_pos_y, agent_info}; }
   void Step(void) noexcept;
 
 protected:
@@ -106,7 +142,7 @@ protected:
     return dist(rng);
   }
   void InitializeAgent(void) noexcept;
-  void InitializeFood(int32_t index) noexcept;
+  void InitializeFood(size_t index) noexcept;
   inline float LuminescenceValue(float v) noexcept {
     //return (v > INTENSITY_MAX) ? 0.0f : (1.0f - (v / INTENSITY_MAX));
     // 1 - v / IM = 1 - v * (1/IM) = -(v * (1/IM)) + 1 = -v * (1/IM) + 1 = v * (-1/IM) + 1
@@ -115,69 +151,37 @@ protected:
 };
 
 
-const std::array<float, Sim2DCircles_f::VIEW_RAYS> Sim2DCircles_f::COS_ANGLES{
+const std::array<float, VIEW_RAYS> Sim::COS_ANGLES{
   []() constexpr {
     std::array<float, VIEW_RAYS> x{};
-    for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+    for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), VIEW_RAYS}) {
       x[index] = std::cos(VIEW_RAYS_ANGLE_START + (static_cast<float>(index) * VIEW_RAYS_ANGLE_DELTA));
     }
     return x;
   }()};
 
 
-const std::array<float, Sim2DCircles_f::VIEW_RAYS> Sim2DCircles_f::SIN_ANGLES{
+const std::array<float, VIEW_RAYS> Sim::SIN_ANGLES{
   []() constexpr {
     std::array<float, VIEW_RAYS> x{};
-    for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+    for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), VIEW_RAYS}) {
       x[index] = std::sin(VIEW_RAYS_ANGLE_START + (static_cast<float>(index) * VIEW_RAYS_ANGLE_DELTA));
     }
     return x;
   }()};
 
 
-std::unique_ptr<Sim2DCircles_f> Sim2DCircles_f::Create(jms::utils::random_helper::optional_seed_input_t seed) {
-  std::unique_ptr<Sim2DCircles_f> sim{new Sim2DCircles_f{}};
+std::unique_ptr<Sim> Sim::Create(jms::utils::random_helper::optional_seed_input_t seed) {
+  std::unique_ptr<Sim> sim{new Sim{}};
   jms::utils::random_helper::SetSeed_mt19937_64(sim->rng, seed);
   sim->InitializeAgent();
-  for (int32_t index : std::ranges::iota_view {0, NUM_FOOD_PER_AGENT}) { sim->InitializeFood(index); }
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), NUM_FOOD_PER_AGENT}) { sim->InitializeFood(index); }
   std::fill_n(sim->agent_view.begin(), VIEW_RAYS, 0.0f);
   return sim;
 }
 
 
-void Sim2DCircles_f::Draw(std::vector<std::vector<std::vector<uint8_t>>>& grid, float units_wide, float units_high) {
-  int32_t dim_x = static_cast<int32_t>(grid[0].size());
-  int32_t dim_y = static_cast<int32_t>(grid.size());
-  int32_t dim_c = 3;
-  int32_t RED_INDEX = 0;
-  int32_t BLUE_INDEX = 2;
-  float t_dx = units_wide / 2.0f;
-  float t_dy = units_high / 2.0f;
-  float s_dx = static_cast<float>(dim_x) / units_wide;
-  float s_dy = static_cast<float>(dim_y) / units_high;
-  // px_new = (px + t_dx) * s_dx
-  // py_new = (py + t_dy) * s_dy
-  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
-    float fx = food_pos_x[index];
-    float fy = food_pos_y[index];
-    float fgrid_x = static_cast<int32_t>((fx + t_dx) * s_dx);
-    float fgrid_y = static_cast<int32_t>((fy + t_dy) * s_dy);
-    if (fgrid_x >= 0 && fgrid_x < dim_x && fgrid_y >= 0 && fgrid_y < dim_y) {
-      grid[fgrid_y][fgrid_x][BLUE_INDEX] = 255;
-    }
-  }
-  float ax = agent_info[AGENT_POS_X];
-  float ay = agent_info[AGENT_POS_Y];
-  float agrid_x = static_cast<int32_t>((ax + t_dx) * s_dx);
-  float agrid_y = static_cast<int32_t>((ay + t_dy) * s_dy);
-  if (agrid_x >= 0 && agrid_x < dim_x && agrid_y >= 0 && agrid_y < dim_y) {
-    grid[agrid_y][agrid_x][RED_INDEX] = 255;
-  }
-  return;
-}
-
-
-void Sim2DCircles_f::InitializeAgent(void) noexcept {
+void Sim::InitializeAgent(void) noexcept {
   float dx = GenUnit();
   float dy = GenUnit();
   float dlen = std::sqrt(std::fma(dx, dx, dy * dy));
@@ -197,7 +201,7 @@ void Sim2DCircles_f::InitializeAgent(void) noexcept {
 }
 
 
-void Sim2DCircles_f::InitializeFood(int32_t index) noexcept {
+void Sim::InitializeFood(size_t index) noexcept {
   float px = GenUnit();
   float py = GenUnit();
   float plen = std::sqrt(std::fma(px, px, py * py));
@@ -226,7 +230,7 @@ void Sim2DCircles_f::InitializeFood(int32_t index) noexcept {
 }
 
 
-void Sim2DCircles_f::Step(void) noexcept {
+void Sim::Step(void) noexcept {
   /***
    * Process-
    * for each food
@@ -250,7 +254,7 @@ void Sim2DCircles_f::Step(void) noexcept {
   // for each circle that covers the distance covered in this step.
   float H = speed_a * 0.5f;
   float I = SPEED_FOOD_MOVE * 0.5f;
-  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), NUM_FOOD_PER_AGENT}) {
     // Load food information
     float px_f = food_pos_x[index];
     float py_f = food_pos_y[index];
@@ -274,7 +278,7 @@ void Sim2DCircles_f::Step(void) noexcept {
   }
 
   // For possible collisions, determine if an actual collision occurred
-  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), NUM_FOOD_PER_AGENT}) {
     float energy_f = food_energy[index];
 
     if (collision_check[index] >= 0.0f) {
@@ -328,7 +332,7 @@ void Sim2DCircles_f::Step(void) noexcept {
   agent_info[AGENT_ENERGY] = energy_a;
 
   // Move food
-  for (int32_t index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), NUM_FOOD_PER_AGENT}) {
     // Load food information
     float px_f = food_pos_x[index];
     float py_f = food_pos_y[index];
@@ -345,7 +349,7 @@ void Sim2DCircles_f::Step(void) noexcept {
   }
 
   // Generate agent view
-  for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), VIEW_RAYS}) {
     float cos_t = COS_ANGLES[index];
     float sin_t = SIN_ANGLES[index];
     rays_dx[index] = std::fma(dx_a, cos_t, -dy_a * sin_t);
@@ -354,7 +358,7 @@ void Sim2DCircles_f::Step(void) noexcept {
   std::fill_n(working_agent_view.begin(), VIEW_RAYS, std::numeric_limits<float>::max());
 
   // Slowest unit of this function by a few orders of magnitude.
-  for (int32_t food_index : std::ranges::iota_view{0, NUM_FOOD_PER_AGENT}) {
+  for (size_t food_index : std::ranges::iota_view {static_cast<size_t>(0), NUM_FOOD_PER_AGENT}) {
     // Load food information
     float px_f = food_pos_x[food_index];
     float py_f = food_pos_y[food_index];
@@ -392,7 +396,7 @@ void Sim2DCircles_f::Step(void) noexcept {
       }
     }
 
-    for (int32_t ray_index : std::ranges::iota_view{0, VIEW_RAYS}) {
+    for (size_t ray_index : std::ranges::iota_view {static_cast<size_t>(0), VIEW_RAYS}) {
       // float a = 1.0;
       float b_partial = std::fma(A, rays_dx[ray_index], C * rays_dy[ray_index]);
       float discriminant = std::fma(b_partial, b_partial, H);
@@ -418,7 +422,7 @@ void Sim2DCircles_f::Step(void) noexcept {
     }
   }
 
-  for (int32_t index : std::ranges::iota_view{0, VIEW_RAYS}) {
+  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), VIEW_RAYS}) {
     agent_view[index] = LuminescenceValue(working_agent_view[index]);
   }
 
@@ -426,6 +430,7 @@ void Sim2DCircles_f::Step(void) noexcept {
 }
 
 
+} // namespace Circles2D_f
 } // namespace sim
 } // namespace jms
 

@@ -1,5 +1,5 @@
 CPPFLAGS = -std=c++20 -march=native -mtune=native -mno-avx256-split-unaligned-load -O3
-LIBS = -lfmt -lpthread
+LIBS = -lfmt -lpthread -lSDL2
 SRCS = \
 	targets/scratch/sim2d_circle.cpp
 TARGET = scratch_sim2d_circle
