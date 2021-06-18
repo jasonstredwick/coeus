@@ -7,7 +7,6 @@
 
 #include "fmt/core.h"
 #include "taskflow/taskflow.hpp"
-#include "SDL2/SDL.h"
 
 #include "jms/sim/sim2d_circles_d.h"
 #include "jms/sim/sim2d_circles_f.h"
@@ -46,31 +45,19 @@ struct VizInfo {
 };
 
 
-void Help(std::optional<std::string> error_msg=std::nullopt) {
-  fmt::print("scratch_sim2d_circle [args]\n");
-  if (error_msg) { fmt::print("{}\n", error_msg.value()); }
-  fmt::print("\n");
-  fmt::print("    --use-double    Run simulation using double instead of float.; default=false\n");
-  fmt::print("    --use-threads   Use threads; default=false\n");
-  fmt::print("    --num-agents    Number of agents; default={}\n", DEFAULT_AGENTS);
-  fmt::print("    --num-steps     Number of steps; default={}\n", DEFAULT_STEPS);
-  fmt::print("    --viz           Display visualization\n");
-  return;
+template <typename T>
+std::optional<VizInfo<T>> CreateVizInfo(bool use_viz, T spawn_radius) {
+  std::optional<VizInfo<T>> viz_info;
+  if (use_viz) {
+    viz_info = VizInfo<T> {
+      .renderer=jms::utils::viz::SDL2Renderer {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::SDL2Renderer::Options {.title="Sim2DCircle", .render_draw_color=jms::utils::viz::COLOR_BLACK}},
+      .point_render=jms::utils::viz::PointRender<T> {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::COLOR_BLACK, jms::utils::viz::COLOR_WHITE}
+    };
+    viz_info.value().point_render.ChangeTransformers(-spawn_radius, spawn_radius, -spawn_radius, spawn_radius);
+  }
+  return viz_info;
 }
 
-
-/*
-
-
-  jms::utils::viz::SDL2Renderer renderer {SCREEN_WIDTH, SCREEN_HEIGHT, SDL2Renderer::Options {.render_draw_color=SDL2Renderer::Color {.red=0xff, .green=0xff, .blue=0xff}}};
-  while (renderer.ProcessEventsOrQuit()) {
-    int result = renderer.Draw(img);
-    if (result) {
-      std::cout << "Failed to render image: " << result << std::endl;
-      break;
-    }
-  }
-*/
 
 void Draw(auto& renderer, auto& point_render, auto& sim) {
   point_render.Clear();
@@ -88,6 +75,19 @@ void Draw(auto& renderer, auto& point_render, auto& sim) {
 }
 
 
+void Help(std::optional<std::string> error_msg=std::nullopt) {
+  fmt::print("scratch_sim2d_circle [args]\n");
+  if (error_msg) { fmt::print("{}\n", error_msg.value()); }
+  fmt::print("\n");
+  fmt::print("    --use-double    Run simulation using double instead of float.; default=false\n");
+  fmt::print("    --use-threads   Use threads; default=false\n");
+  fmt::print("    --num-agents    Number of agents; default={}\n", DEFAULT_AGENTS);
+  fmt::print("    --num-steps     Number of steps; default={}\n", DEFAULT_STEPS);
+  fmt::print("    --viz           Display visualization\n");
+  return;
+}
+
+
 void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads, std::optional<auto> viz_info) {
   std::chrono::high_resolution_clock clock{};
   double total = 0.0;
@@ -96,14 +96,13 @@ void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads
     // run with no threading.
     auto t = clock.now();
     for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
-      auto t1 = clock.now();
       for (auto& sim : sims) {
         sim->Step();
       }
-      auto t2 = clock.now();
-      if (viz_info.has_value()) { Draw(viz_info.value().renderer, viz_info.value().point_render, *sims[0]); }
-      auto t3 = clock.now();
-      //fmt::print("{}  --  {}\n", std::chrono::duration_cast<std::chrono::microseconds>(t2 - t1).count(), std::chrono::duration_cast<std::chrono::microseconds>(t3 - t2).count());
+      if (viz_info.has_value()) {
+        Draw(viz_info.value().renderer, viz_info.value().point_render, *sims[0]);
+        if (!viz_info.value().renderer.ProcessEventsOrQuit()) { break; }
+      }
     }
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
@@ -130,11 +129,8 @@ void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads
     }
     auto t = clock.now();
     for (size_t step : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
-      auto t1 = clock.now();
       executor.run(taskflow);
       executor.wait_for_all();
-      auto dt1 = clock.now() - t1;
-      fmt::print("{}\n", std::chrono::duration_cast<std::chrono::microseconds>(dt1).count());
     }
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
@@ -217,31 +213,19 @@ int main(int argc, char** argv) {
     return 0;
   }
 
+  auto viz_info = CreateVizInfo(use_viz, (use_double) ? jms::sim::Circles2D_d::SPAWN_RADIUS_MAX : jms::sim::Circles2D_f::SPAWN_RADIUS_MAX);
+  if (viz_info.has_value() && !viz_info.value().renderer.IsReady()) {
+    std::cout << "Failed to create window; window not ready!" << std::endl;
+    return 0;
+  }
+
   if (use_double) {
-    std::optional<VizInfo<double>> viz_info;
-    if (use_viz) {
-      viz_info = VizInfo<double> {
-        .renderer=jms::utils::viz::SDL2Renderer {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::SDL2Renderer::Options {.title="Sim2DCircle", .render_draw_color=jms::utils::viz::COLOR_BLACK}},
-        .point_render=jms::utils::viz::PointRender<double> {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::COLOR_BLACK, jms::utils::viz::COLOR_WHITE}
-      };
-      double sr = jms::sim::Circles2D_d::SPAWN_RADIUS_MAX;
-      viz_info.value().point_render.ChangeTransformers(-sr, sr, -sr, sr);
-    }
     std::vector<std::unique_ptr<jms::sim::Circles2D_d::Sim>> sims;
     for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
       sims.emplace_back(jms::sim::Circles2D_d::Sim::Create());
     }
     Process(sims, num_agents, num_steps, num_threads, std::move(viz_info));
   } else {
-    std::optional<VizInfo<float>> viz_info;
-    if (use_viz) {
-      viz_info = VizInfo<float> {
-        .renderer=jms::utils::viz::SDL2Renderer {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::SDL2Renderer::Options {.title="Sim2DCircle", .render_draw_color=jms::utils::viz::COLOR_BLACK}},
-        .point_render=jms::utils::viz::PointRender<float> {BUFFER_DIM_X, BUFFER_DIM_Y, jms::utils::viz::COLOR_BLACK, jms::utils::viz::COLOR_WHITE}
-      };
-      float sr = jms::sim::Circles2D_f::SPAWN_RADIUS_MAX;
-      viz_info.value().point_render.ChangeTransformers(-sr, sr, -sr, sr);
-    }
     std::vector<std::unique_ptr<jms::sim::Circles2D_f::Sim>> sims;
     for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
       sims.emplace_back(jms::sim::Circles2D_f::Sim::Create());

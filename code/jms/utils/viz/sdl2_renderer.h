@@ -40,13 +40,18 @@ private:
 public:
   SDL2Renderer(int width, int height, Options&& options={})
   : render_draw_color(options.render_draw_color.value_or(Color {})) {
+    if (false && SDL_Init(SDL_INIT_VIDEO) < 0) {
+      std::cout << "Could not initialize SDL!: SDL_Error: " << SDL_GetError() << std::endl;
+      return;
+    }
+
     window.reset(
       SDL_CreateWindow(options.title.value_or(std::string {}).c_str(),
                        options.pos_x.value_or(SDL_WINDOWPOS_UNDEFINED),
                        options.pos_y.value_or(SDL_WINDOWPOS_UNDEFINED),
                        width,
                        height,
-                       options.flags.value_or(0))
+                       options.flags.value_or(SDL_WINDOW_SHOWN))
     );
     if (!window) {
       std::cout << "Window could not be created! SDL_Error: " << SDL_GetError() << std::endl;
@@ -88,7 +93,7 @@ public:
   SDL2Renderer& operator=(const SDL2Renderer&) = delete;
   SDL2Renderer& operator=(SDL2Renderer&&) = default;
 
-  int Draw(const std::vector<std::vector<Color>>& img) {
+  int Draw(const std::vector<std::vector<Color>>& img) noexcept {
     if (!ready) { return 1; }
     SDL_Rect viewport;
     SDL_RenderGetViewport(renderer.get(), &viewport);
@@ -104,15 +109,17 @@ public:
       std::memcpy(pixel_bytes + (y * pitch), reinterpret_cast<const uint8_t*>(img[y].data()), width * sizeof(Color));
     }
     SDL_UnlockTexture(drawable.get());
-    SDL_SetRenderDrawColor(renderer.get(), render_draw_color.red, render_draw_color.green, render_draw_color.blue, render_draw_color.alpha);
-    SDL_RenderClear(renderer.get());
-    SDL_RenderCopy(renderer.get(), drawable.get(), nullptr, nullptr);
+    int result = SDL_SetRenderDrawColor(renderer.get(), render_draw_color.red, render_draw_color.green, render_draw_color.blue, render_draw_color.alpha);
+    result = SDL_RenderClear(renderer.get());
+    result = SDL_RenderCopy(renderer.get(), drawable.get(), nullptr, nullptr);
     SDL_RenderPresent(renderer.get());
     SDL_UpdateWindowSurface(window.get());
     return 0;
   }
 
-  bool ProcessEventsOrQuit(void) {
+  bool IsReady(void) const noexcept { return ready; }
+
+  bool ProcessEventsOrQuit(void) const noexcept {
     if (!ready) { return true; }
     SDL_Event e;
     bool not_quit = true;
