@@ -6,16 +6,15 @@
 #include <vector>
 
 #include "fmt/core.h"
-#include "taskflow/taskflow.hpp"
+//#include "taskflow/taskflow.hpp"
 
-#include "jms/sim/sim2d_circles_d.h"
-#include "jms/sim/sim2d_circles_f.h"
+#include "jms/sim/circles2d.h"
 #include "jms/utils/viz/sdl2_renderer.h"
 #include "jms/utils/viz/color.h"
 #include "jms/utils/viz/point_render.h"
 
 
-namespace taskflow = tf;
+//namespace taskflow = tf;
 
 
 constexpr size_t BUFFER_DIM_Y = 1024;
@@ -63,15 +62,27 @@ void Draw(auto& renderer, auto& point_render, auto& sim) {
   point_render.Clear();
   auto pi = sim.GetPositionInfoAccess();
   point_render.SetDrawColor(jms::utils::viz::COLOR_WHITE);
-  for (std::optional<auto> food = pi.NextFood(); food.has_value(); food = pi.NextFood()) {
+  for (std::optional<auto> food = pi.Food(); food.has_value(); food = pi.Food()) {
     auto pos = food.value();
     point_render.DrawPoint(pos.x, pos.y);
   }
-  auto agent_pos = pi.Agent();
-  point_render.SetDrawColor(jms::utils::viz::COLOR_RED);
-  point_render.DrawPoint(agent_pos.x, agent_pos.y);
+  for (std::optional<auto> agent = pi.Agent(); agent.has_value(); agent = pi.Agent()) {
+    auto pos = agent.value();
+    point_render.SetDrawColor(jms::utils::viz::COLOR_RED);
+    point_render.DrawPoint(pos.x, pos.y);
+  }
   renderer.Draw(point_render.Data());
   return;
+}
+
+
+template <typename T>
+auto GenerateSims(size_t num_agents) {
+  std::vector<std::unique_ptr<jms::sim::Circles2D::Sim<T>>> sims;
+  for (size_t i=0; i<num_agents; ++i) {
+    sims.emplace_back(jms::sim::Circles2D::Sim<T>::Create(static_cast<int32_t>(i+100)));
+  }
+  return sims;
 }
 
 
@@ -88,17 +99,33 @@ void Help(std::optional<std::string> error_msg=std::nullopt) {
 }
 
 
-void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads, std::optional<auto> viz_info) {
+template <typename T>
+void Process(size_t num_agents, size_t num_steps, size_t num_threads, bool use_viz) {
   std::chrono::high_resolution_clock clock{};
   double total = 0.0;
+  double min = 1000000000000.0;
+  double max = -1.0;
+  double count = 0;
 
   if (num_threads <= 1) {
     // run with no threading.
+    auto sims = GenerateSims<T>(num_agents);
+    auto viz_info = CreateVizInfo(use_viz, jms::sim::Circles2D::Config<T>::SPAWN_RADIUS_MAX);
+    if (viz_info.has_value() && !viz_info.value().renderer.IsReady()) {
+      fmt::print("Failed to create window; window not ready!\n");
+      return;
+    }
     auto t = clock.now();
-    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
+    for (size_t i=0; i<num_steps; ++i) {
+      auto t1 = clock.now();
       for (auto& sim : sims) {
         sim->Step();
       }
+      auto dt1 = clock.now() - t1;
+      double val = std::chrono::duration_cast<std::chrono::microseconds>(dt1).count();
+      min = std::min(min, val);
+      max = std::max(max, val);
+      if (val > 1000) { count = count + 1; }
       if (viz_info.has_value()) {
         Draw(viz_info.value().renderer, viz_info.value().point_render, *sims[0]);
         if (!viz_info.value().renderer.ProcessEventsOrQuit()) { break; }
@@ -107,6 +134,7 @@ void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
   } else {
+    /*
     // use threads.
     size_t unit_size = num_agents / num_threads; // extra accounted later
     size_t num_units = std::min(num_agents, num_threads);
@@ -117,10 +145,10 @@ void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads
     taskflow::Taskflow taskflow;
     size_t start = 0;
     size_t end = start + unit_size + (extra ? 1 : 0);
-    for (size_t unit_index : std::ranges::iota_view {static_cast<size_t>(0), num_units}) {
+    for (size_t unit_index=0; unit_index<num_units; ++unit_index) {
       if (end > sims.size()) { end = sims.size(); }
       taskflow.emplace([&sims, start, end]() {
-        for (size_t i : std::ranges::iota_view {start, end}) {
+        for (size_t i=start; i<end; ++i) {
           sims[i]->Step();
         }
       });
@@ -128,15 +156,19 @@ void Process(auto& sims, size_t num_agents, size_t num_steps, size_t num_threads
       end = start + unit_size + (unit_index + 1 < extra ? 1 : 0);
     }
     auto t = clock.now();
-    for (size_t step : std::ranges::iota_view {static_cast<size_t>(0), num_steps}) {
+    for (size_t step=0; step<num_steps; ++step) {
       executor.run(taskflow);
       executor.wait_for_all();
     }
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
+    */
   }
-  fmt::print("Total time: {}\n", total);
+  fmt::print("Total time: {}  {}\n", total, total / 1000000.0);
   fmt::print("Avg time: {}\n", (total / num_steps) / 1000000.0);
+  fmt::print("Min time: {}  {}\n", min, min / 1000000.0);
+  fmt::print("Max time: {}  {}\n", max, max / 1000000.0);
+  fmt::print("Count: {}\n", count);
 
   return;
 }
@@ -212,25 +244,10 @@ int main(int argc, char** argv) {
   if (num_agents < 0 || num_steps < 0) {
     return 0;
   }
-
-  auto viz_info = CreateVizInfo(use_viz, (use_double) ? jms::sim::Circles2D_d::SPAWN_RADIUS_MAX : jms::sim::Circles2D_f::SPAWN_RADIUS_MAX);
-  if (viz_info.has_value() && !viz_info.value().renderer.IsReady()) {
-    std::cout << "Failed to create window; window not ready!" << std::endl;
-    return 0;
-  }
-
   if (use_double) {
-    std::vector<std::unique_ptr<jms::sim::Circles2D_d::Sim>> sims;
-    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
-      sims.emplace_back(jms::sim::Circles2D_d::Sim::Create());
-    }
-    Process(sims, num_agents, num_steps, num_threads, std::move(viz_info));
+    Process<double>(num_agents, num_steps, num_threads, use_viz);
   } else {
-    std::vector<std::unique_ptr<jms::sim::Circles2D_f::Sim>> sims;
-    for (size_t i : std::ranges::iota_view {static_cast<size_t>(0), num_agents}) {
-      sims.emplace_back(jms::sim::Circles2D_f::Sim::Create());
-    }
-    Process(sims, num_agents, num_steps, num_threads, std::move(viz_info));
+    Process<float>(num_agents, num_steps, num_threads, use_viz);
   }
   return 0;
 }
