@@ -72,7 +72,7 @@ public:
 
 template <typename T, template <typename> typename Array_t>
 inline ArrayOps<T, Array_t> Clone(const Array_t<T>& a) noexcept {
-  return ArrayOps<T, Array_t>{a};
+  return ArrayOps<T, Array_t>(a);
 }
 
 

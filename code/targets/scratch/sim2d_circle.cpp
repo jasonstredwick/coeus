@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <chrono>
 #include <memory>
+#include <pthread.h>
 #include <string>
 #include <thread>
 #include <vector>
@@ -9,6 +10,7 @@
 //#include "taskflow/taskflow.hpp"
 
 #include "jms/sim/circles2d.h"
+#include "jms/utils/barrier.h" // until <barrier> is available; gcc-11
 #include "jms/utils/viz/sdl2_renderer.h"
 #include "jms/utils/viz/color.h"
 #include "jms/utils/viz/point_render.h"
@@ -60,15 +62,16 @@ std::optional<VizInfo<T>> CreateVizInfo(bool use_viz, T spawn_radius) {
 
 void Draw(auto& renderer, auto& point_render, auto& sim) {
   point_render.Clear();
-  auto pi = sim.GetPositionInfoAccess();
   point_render.SetDrawColor(jms::utils::viz::COLOR_WHITE);
-  for (std::optional<auto> food = pi.Food(); food.has_value(); food = pi.Food()) {
-    auto pos = food.value();
+  auto fiter = sim.AgentPos();
+  for (std::optional<auto> opt_pos=fiter(); opt_pos.has_value(); opt_pos=fiter()) {
+    auto pos = opt_pos.value();
     point_render.DrawPoint(pos.x, pos.y);
   }
-  for (std::optional<auto> agent = pi.Agent(); agent.has_value(); agent = pi.Agent()) {
-    auto pos = agent.value();
-    point_render.SetDrawColor(jms::utils::viz::COLOR_RED);
+  point_render.SetDrawColor(jms::utils::viz::COLOR_RED);
+  auto aiter = sim.FoodPos();
+  for (std::optional<auto> opt_pos=aiter(); opt_pos.has_value(); opt_pos=aiter()) {
+    auto pos = opt_pos.value();
     point_render.DrawPoint(pos.x, pos.y);
   }
   renderer.Draw(point_render.Data());
@@ -78,7 +81,7 @@ void Draw(auto& renderer, auto& point_render, auto& sim) {
 
 template <typename T>
 auto GenerateSims(size_t num_agents) {
-  std::vector<std::unique_ptr<jms::sim::Circles2D::Sim<T>>> sims;
+  alignas(64) std::vector<std::unique_ptr<jms::sim::Circles2D::Sim<T>>> sims;
   for (size_t i=0; i<num_agents; ++i) {
     sims.emplace_back(jms::sim::Circles2D::Sim<T>::Create(static_cast<int32_t>(i+100)));
   }
@@ -118,9 +121,7 @@ void Process(size_t num_agents, size_t num_steps, size_t num_threads, bool use_v
     auto t = clock.now();
     for (size_t i=0; i<num_steps; ++i) {
       auto t1 = clock.now();
-      for (auto& sim : sims) {
-        sim->Step();
-      }
+      for (auto& sim : sims) { sim->Step(); }
       auto dt1 = clock.now() - t1;
       double val = std::chrono::duration_cast<std::chrono::microseconds>(dt1).count();
       min = std::min(min, val);
@@ -134,35 +135,57 @@ void Process(size_t num_agents, size_t num_steps, size_t num_threads, bool use_v
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
   } else {
-    /*
     // use threads.
     size_t unit_size = num_agents / num_threads; // extra accounted later
     size_t num_units = std::min(num_agents, num_threads);
     size_t extra = num_agents % num_threads;
     fmt::print("Num units: {}\n", num_units);
     fmt::print("Unit size: {} ; extra: {}\n", unit_size, extra);
-    taskflow::Executor executor(num_units);
-    taskflow::Taskflow taskflow;
+    alignas(64) auto sims = GenerateSims<T>(num_agents);
+    num_steps += 1; // for stats since first step is ignored timing-wise to reduce noise due to setup.
+
+    bool first = true;
+    auto t1 = clock.now();
+    auto OnComplete = [&first, &t1, &min, &max, &count, &clock]() noexcept {
+      if (first) { first = false; t1 = clock.now(); return; }
+      auto dt1 = clock.now() - t1;
+      double val = std::chrono::duration_cast<std::chrono::microseconds>(dt1).count();
+      min = std::min(min, val);
+      max = std::max(max, val);
+      if (val > 1000) { count = count + 1; }
+      t1 = clock.now();
+      return;
+    };
+    jms::utils::barrier sync_point(num_threads, OnComplete);
+    auto Work = [&sims, &sync_point](size_t start, size_t end, size_t num_steps) {
+      for (size_t step=0; step<num_steps; ++step) {
+        for (size_t i=start; i<end; ++i) { sims[start]->Step(); }
+        sync_point.arrive_and_wait();
+      }
+    };
+
+    std::vector<std::thread> threads;
     size_t start = 0;
     size_t end = start + unit_size + (extra ? 1 : 0);
     for (size_t unit_index=0; unit_index<num_units; ++unit_index) {
       if (end > sims.size()) { end = sims.size(); }
-      taskflow.emplace([&sims, start, end]() {
-        for (size_t i=start; i<end; ++i) {
-          sims[i]->Step();
-        }
-      });
+      threads.push_back(std::thread{Work, start, end, num_steps});
+      cpu_set_t cpuset;
+      CPU_ZERO(&cpuset);
+      CPU_SET(unit_index, &cpuset);
+      int rc = pthread_setaffinity_np(threads[unit_index].native_handle(), sizeof(cpu_set_t), &cpuset);
+      if (rc != 0) {
+        fmt::print("ERROR: Failed to set affinitiy.\n");
+      }
       start = end;
       end = start + unit_size + (unit_index + 1 < extra ? 1 : 0);
     }
     auto t = clock.now();
-    for (size_t step=0; step<num_steps; ++step) {
-      executor.run(taskflow);
-      executor.wait_for_all();
-    }
+    for (auto& thread : threads) { thread.join(); }
     auto dt = clock.now() - t;
     total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count();
-    */
+
+    num_steps -= 1; // see above; reduced for stats purpose.
   }
   fmt::print("Total time: {}  {}\n", total, total / 1000000.0);
   fmt::print("Avg time: {}\n", (total / num_steps) / 1000000.0);

@@ -37,8 +37,8 @@ struct Values : public ValueClasses<T>... {
 template <typename T, template <typename> class...ValueClasses>
 constexpr std::vector<Values<T, ValueClasses...>> Precompute(size_t num_angles, T start, T delta) noexcept {
   static_assert(!std::is_empty_v<Values<T, ValueClasses...>>, "Precompute requires at least one function; empty.");
-  alignas(64) std::vector<Values<T, ValueClasses...>> values (num_angles); // must use parans to set num elements.
-  for (size_t index : std::ranges::iota_view {static_cast<size_t>(0), num_angles}) {
+  alignas(64) std::vector<Values<T, ValueClasses...>> values(num_angles); // must use parans to set num elements.
+  for (size_t index : std::ranges::iota_view{static_cast<size_t>(0), num_angles}) {
     values[index] = std::move(Values<T, ValueClasses...> {start + (static_cast<T>(index) * delta)});
   }
   return values;
@@ -57,6 +57,38 @@ constexpr std::vector<Values<T, ValueClasses...>> Precompute(T start, T end, T d
   for (; start <= end; start+=delta) { values.push_back(Values<T, ValueClasses...> {start}); }
   return values;
 }
+*/
+
+
+/*
+template <typename T>
+struct Foo {
+  // Based on counterclockwise rotation sweeping from left to right.
+  alignas(64) static const std::array<T, VIEW_RAYS> COS_ANGLES;
+  alignas(64) static const std::array<T, VIEW_RAYS> SIN_ANGLES;
+};
+
+
+template <jms::math::SimType T>
+const std::array<T, VIEW_RAYS> Sim<T>::COS_ANGLES{
+  []() constexpr {
+    std::array<T, VIEW_RAYS> x{};
+    for (size_t index=0; index<VIEW_RAYS; ++index) {
+      x[index] = std::cos(VIEW_RAYS_ANGLE_START + (static_cast<T>(index) * VIEW_RAYS_ANGLE_DELTA));
+    }
+    return x;
+  }()};
+
+
+template <jms::math::SimType T>
+const std::array<T, VIEW_RAYS> Sim<T>::SIN_ANGLES{
+  []() constexpr {
+    std::array<T, VIEW_RAYS> x{};
+    for (size_t index=0; index<VIEW_RAYS; ++index) {
+      x[index] = std::sin(VIEW_RAYS_ANGLE_START + (static_cast<T>(index) * VIEW_RAYS_ANGLE_DELTA));
+    }
+    return x;
+  }()};
 */
 
 

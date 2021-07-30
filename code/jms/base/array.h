@@ -14,6 +14,26 @@ namespace base {
 namespace array {
 
 
+template <typename Array_t>
+concept Array_c = requires(Array_t a, size_t n) {
+  {a[n]} -> std::convertible_to<typename Array_t::reference>;
+  {a.back()} -> std::convertible_to<typename Array_t::reference>;
+  {a.front()} -> std::convertible_to<typename Array_t::reference>;
+  {a.data()} -> std::convertible_to<typename Array_t::pointer>;
+  {a.empty()} -> std::convertible_to<bool>;
+  {a.size()} -> std::convertible_to<size_t>;
+  {a.max_size()} -> std::convertible_to<size_t>;
+  {a.begin()} -> std::random_access_iterator;
+  {a.cbegin()} -> const std::random_access_iterator;
+  {a.end()} -> std::random_access_iterator;
+  {a.cend()} -> const std::random_access_iterator;
+  {a.rbegin()} -> std::reverse_iterator;
+  {a.crbegin()} -> const std::reverse_iterator;
+  {a.rend()} -> std::reverse_iterator;
+  {a.crend()} -> const std::reverse_iterator;
+};
+
+
 template <typename T, size_t align_size=alignof(T)>
 class AlignedDynamic {
   static_assert((align_size == sizeof(T)) ||
@@ -26,7 +46,7 @@ class AlignedDynamic {
   size_t raw_total_bytes {0};
 
 public:
-  using value_type      = T;
+  using value_type      = std::remove_cv_t<T>;
   using reference       = T&;
   using const_reference = const T&;
   using pointer         = T*;
@@ -42,7 +62,7 @@ public:
   AlignedDynamic(const AlignedDynamic& from_array) noexcept { CopyConstruct(from_array); return; }
   AlignedDynamic(AlignedDynamic&&) noexcept = default;
   ~AlignedDynamic(void) noexcept = default;
-  AlignedDynamic& operator=(const AlignedDynamic& from_array) noexcept = delete;
+  AlignedDynamic& operator=(const AlignedDynamic& from_array) noexcept { Copy(from_array); return *this; }
   AlignedDynamic& operator=(AlignedDynamic&&) noexcept = default;
 
   reference operator[](size_t index) noexcept { return array_data[index]; }
@@ -85,6 +105,18 @@ private:
     size_t padding = (delta > 0) ? align_size - delta : 0;
     // extra align_size allows for aligning pointer to start of data to align_size memory boundary
     return num_bytes + padding + align_size;
+  }
+
+  void Copy(const AlignedDynamic& from_array) noexcept {
+    // total bytes needed for N=0 is 0; so false for N=0 in all cases
+    if (raw_total_bytes < TotalBytesNeeded(from_array.array_size)) {
+      Init(from_array.array_size);
+    } else {
+      array_size = from_array.array_size;
+      if (array_size == 0) { array_data = nullptr; return; }
+    }
+    std::copy(from_array.cbegin(), from_array.cend(), begin());
+    return;
   }
 
   void CopyConstruct(const AlignedDynamic& from_array) noexcept {
@@ -137,16 +169,22 @@ private:
 
 template <typename T, size_t N, size_t align_size=alignof(T)>
 class AlignedStatic {
+private:
   static_assert((align_size == sizeof(T)) ||
                 (align_size > sizeof(T) && align_size % sizeof(T) == 0) ||
                 (align_size < sizeof(T) && sizeof(T) % align_size == 0),
                 "AlignedStatic requires type size and align_size to be divisible.");
   static_assert(N > 0, "AlignedStatic of fixed size N cannot be zero.");
 
-  alignas(align_size) T array_data[N] {};
+  constexpr static size_t num_bytes_v = N * sizeof(T);
+  constexpr static size_t remaining_v = num_bytes_v % align_size;
+  constexpr static size_t padding_v = (remaining_v > 0) ? align_size - remaining_v : 0;
+  constexpr static size_t total_bytes_v = num_bytes_v + padding_v;
+
+  alignas(align_size) T array_data[N]{};
 
 public:
-  using value_type      = T;
+  using value_type      = std::remove_cv_t<T>;
   using reference       = T&;
   using const_reference = const T&;
   using pointer         = T*;
@@ -157,11 +195,6 @@ public:
   using const_riterator = std::reverse_iterator<const_iterator>;
   using difference_type = ptrdiff_t;
   using size_type       = size_t;
-
-  constexpr static size_t num_bytes_v = N * sizeof(T);
-  constexpr static size_t remaining_v = num_bytes_v % align_size;
-  constexpr static size_t padding_v = (remaining_v > 0) ? align_size - remaining_v : 0;
-  constexpr static size_t total_bytes_v = num_bytes_v + padding_v;
 
   constexpr AlignedStatic(void) noexcept = default;
   constexpr AlignedStatic(AlignedStatic&&) noexcept = default;
