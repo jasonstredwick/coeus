@@ -16,7 +16,6 @@
 
 #include "data.h"
 #include "mnist.h"
-#include "random.h"
 
 
 constexpr const size_t INPUT_BITS = 28 * 28 * 8;
@@ -27,7 +26,7 @@ constexpr const size_t HALF_INPUT_BITS = INPUT_BITS / 2;
 constexpr const size_t HALF_LAYER_BITS = LAYER_BITS / 2;
 
 constexpr const size_t POP_SIZE = 128;
-constexpr const size_t NUM_GENERATIONS = 10;
+constexpr const size_t NUM_GENERATIONS = 1;
 constexpr const size_t NUM_KEEP = 8;
 constexpr const int64_t PICK_SCALE = 1'000'000;
 constexpr const double POINT_MUTATION_RATE = (0.01 * static_cast<double>(NN_TOTAL_BITS)) / static_cast<double>(NN_TOTAL_BITS);
@@ -65,11 +64,12 @@ std::bitset<N> InputToBitset(const std::vector<uint8_t>& img_bytes) noexcept {
 template <size_t N>
 std::vector<std::bitset<N>> InputLabelsToBitset(const std::vector<uint32_t>& labels) noexcept {
   std::vector<std::bitset<N>> one_hots(labels.size());
-  for (auto label_id : labels) {
-    std::bitset<N> one_hot{};
-    one_hot.set(static_cast<size_t>(label_id), true);
-    one_hots.emplace_back(one_hot);
-  }
+  std::ranges::transform(labels, std::make_move_iterator(one_hots.begin()),
+                        [](const uint32_t label_id) -> std::bitset<N> {
+                          std::bitset<N> one_hot{};
+                          one_hot.set(static_cast<size_t>(label_id), true);
+                          return one_hot;
+                        });
   return one_hots;
 }
 

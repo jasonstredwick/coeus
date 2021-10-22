@@ -1,4 +1,4 @@
-//g++ exp4.cpp -std=c++20 -O3 -march=native -mtune=native -mno-avx256-split-unaligned-load -o bin/exp4
+//g++ exp2.cpp -std=c++20 -O3 -march=native -mtune=native -mno-avx256-split-unaligned-load -o bin/exp2
 
 #include <algorithm>
 #include <cstdint>
@@ -110,6 +110,7 @@ struct AlignedArray {
 // Cheating; using this instead of propagating a template from BitArray through main (messy).
 // TODO: Cleanup if pursued.  At this point, AlignedArray is over 2x faster for layer sizes approximately or greater than a cache line.
 using Buffer_t = AlignedArray<CACHE_SIZE, true>;
+//using Buffer_t = AlignedArray<CACHE_SIZE, true>;
 //using Buffer_t = std::vector<std::byte>;
 
 
@@ -205,8 +206,8 @@ struct alignas(CACHE_SIZE) CacheChunk {
 
         std::span<      std::byte> AsBytes(void)       noexcept { return std::as_writable_bytes(std::span{data}); }
   const std::span<const std::byte> AsBytes(void) const noexcept { return std::as_bytes(std::span{data}); }
-        std::span<      value_type> AsSpan(void)       noexcept { return std::span<      value_type>{data, N}; }
-  const std::span<const value_type> AsSpan(void) const noexcept { return std::span<const value_type>{data, N}; }
+        std::span<      value_type> AsSpan(void)       noexcept { return std::span{data}; }
+  const std::span<const value_type> AsSpan(void) const noexcept { return std::span{data}; }
 };
 
 
@@ -560,56 +561,28 @@ void Replicate(std::span<const jms::nn::BNN> src, std::span<jms::nn::BNN> dst, s
 #include "mnist.h"
 
 
-constexpr const size_t LAYER_BITS = 512;// * 32;
+constexpr const size_t LAYER_BITS = 64;//512;// * 32;
 
 constexpr const size_t POP_SIZE = 128;
-constexpr const size_t NUM_GENERATIONS = 50;//10;
-constexpr const size_t BATCH_SIZE = 256;
+constexpr const size_t NUM_GENERATIONS = 1;//50;//10;
+constexpr const size_t BATCH_SIZE = 256;//60000;
 constexpr const size_t NUM_KEEP = 8;//16;//10;
 constexpr const int64_t PICK_SCALE = 1'000'000;
 constexpr const double POINT_MUTATION_RATE = 0.01;
 
 
-int Train(void) noexcept {
+int Train(const std::vector<std::vector<uint8_t>>& imgs, const std::vector<uint32_t>& labels) noexcept {
   std::chrono::high_resolution_clock clock{};
 
-  std::cout << "Load training data ... ";
-  auto t = clock.now();
-  data::Data training_data{};
-  if (!mnist::LoadTraining(training_data)) {
-    std::cout << std::endl;
-    std::cout << "Failed to load training data." << std::endl;
-    return 1;
-  }
-  auto dt = clock.now() - t;
-  double total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count() / 1000000.0;
-  std::cout << "done (" << total << " sec)" << std::endl;
-
-  std::cout << "Load testing data ... ";
-  t = clock.now();
-  data::Data testing_data{};
-  if (!mnist::LoadTraining(testing_data)) {
-    std::cout << std::endl;
-    std::cout << "Failed to load testing data." << std::endl;
-    return 1;
-  }
-  dt = clock.now() - t;
-  total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count() / 1000000.0;
-  std::cout << "done (" << total << " sec)" << std::endl;
-
-  std::cout << "Training data size- " << training_data.images.size() << std::endl;
-  std::cout << "Testing data size- " << testing_data.images.size() << std::endl;
   std::random_device rd{};
   std::seed_seq seed{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
   std::mt19937_64 rng{seed};
 
-  t = clock.now();
-  jms::nn::Dataset training_dataset{training_data.images, training_data.labels};
-  jms::nn::Dataset testing_dataset{testing_data.images, testing_data.labels};
-  for (int i=0; i<50; ++i) { training_dataset.Shuffle(rng); }
-  for (int i=0; i<1; ++i) { testing_dataset.Shuffle(rng); }
-  dt = clock.now() - t;
-  total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count() / 1000000.0;
+  auto t = clock.now();
+  jms::nn::Dataset dataset{imgs, labels};
+  for (int i=0; i<50; ++i) { dataset.Shuffle(rng); }
+  auto dt = clock.now() - t;
+  auto total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count() / 1000000.0;
   std::cout << "Transform inputs (" << total << " sec)" << std::endl;
 
   t = clock.now();
@@ -619,8 +592,8 @@ int Train(void) noexcept {
   pops[0].reserve(POP_SIZE);
   pops[1].reserve(POP_SIZE);
   for (size_t i=0; i<POP_SIZE; ++i) {
-    pops[0].emplace_back(training_dataset.InputDim(), training_dataset.OutputDim(), layer_sizes);
-    pops[1].emplace_back(training_dataset.InputDim(), training_dataset.OutputDim(), layer_sizes);
+    pops[0].emplace_back(dataset.InputDim(), dataset.OutputDim(), layer_sizes);
+    pops[1].emplace_back(dataset.InputDim(), dataset.OutputDim(), layer_sizes);
   }
   for (auto& nn : pops[current_pop_index]) { nn.Randomize(rng); }
   double m_rate = POINT_MUTATION_RATE;
@@ -634,9 +607,9 @@ int Train(void) noexcept {
   t = clock.now();
   for (size_t generation=0; generation<NUM_GENERATIONS; ++generation) {
     size_t counter = 0;
-    for (auto opt_batch=training_dataset.Batch(BATCH_SIZE);
+    for (auto opt_batch=dataset.Batch(BATCH_SIZE);
          opt_batch.has_value();
-         opt_batch=training_dataset.Batch(BATCH_SIZE)) {
+         opt_batch=dataset.Batch(BATCH_SIZE)) {
       auto t1 = clock.now();
       size_t next_pop_index = (current_pop_index + 1) % 2;
       auto& pop = pops[current_pop_index];
@@ -669,8 +642,8 @@ int Train(void) noexcept {
     }
     //if (m_rate > 0.02) { m_rate -= 0.005; }
     //if (m_rate > 0.00001) { m_rate *= 0.85; }
-    //training_dataset.Shuffle(rng);
-    training_dataset.ResetBatches();
+    //dataset.Shuffle(rng);
+    dataset.ResetBatches();
   }
   dt = clock.now() - t;
   total = std::chrono::duration_cast<std::chrono::microseconds>(dt).count() / 1000000.0;
@@ -681,5 +654,21 @@ int Train(void) noexcept {
 
 
 int main(void) {
-  return Train();
+  std::cout << "Load training data ... ";
+  data::Data training_data{};
+  if (!mnist::LoadTraining(training_data)) {
+    std::cout << std::endl;
+    std::cout << "Failed to load training data." << std::endl;
+    return 1;
+  }
+  data::Data testing_data{};
+  if (!mnist::LoadTraining(testing_data)) {
+    std::cout << std::endl;
+    std::cout << "Failed to load testing data." << std::endl;
+    return 1;
+  }
+  std::cout << "done." << std::endl;
+  std::cout << "Training data size- " << training_data.images.size() << std::endl;
+  std::cout << "Testing data size- " << testing_data.images.size() << std::endl;
+  return Train(training_data.images, training_data.labels);
 }
