@@ -1,3 +1,5 @@
+// Review: https://www.pcg-random.org/posts/cpp-seeding-surprises.html
+
 #ifndef JMS_UTILS_RANDOM_HELPER_H
 #define JMS_UTILS_RANDOM_HELPER_H
 

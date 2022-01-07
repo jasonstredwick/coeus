@@ -165,6 +165,7 @@ void Process(size_t num_agents, size_t num_steps, size_t num_threads, bool use_v
     };
 
     std::vector<std::thread> threads;
+    threads.reserve(num_units);
     size_t start = 0;
     size_t end = start + unit_size + (extra ? 1 : 0);
     for (size_t unit_index=0; unit_index<num_units; ++unit_index) {

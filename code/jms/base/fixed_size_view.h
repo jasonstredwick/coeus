@@ -2,6 +2,9 @@
 #define JMS_BASE_FIXED_SIZE_VIEW_H
 
 
+#include "jms/base/concepts.h"
+
+
 namespace jms {
 namespace base {
 

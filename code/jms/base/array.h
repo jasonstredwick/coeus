@@ -14,43 +14,22 @@ namespace base {
 namespace array {
 
 
-template <typename Array_t>
-concept Array_c = requires(Array_t a, size_t n) {
-  {a[n]} -> std::convertible_to<typename Array_t::reference>;
-  {a.back()} -> std::convertible_to<typename Array_t::reference>;
-  {a.front()} -> std::convertible_to<typename Array_t::reference>;
-  {a.data()} -> std::convertible_to<typename Array_t::pointer>;
-  {a.empty()} -> std::convertible_to<bool>;
-  {a.size()} -> std::convertible_to<size_t>;
-  {a.max_size()} -> std::convertible_to<size_t>;
-  {a.begin()} -> std::random_access_iterator;
-  {a.cbegin()} -> const std::random_access_iterator;
-  {a.end()} -> std::random_access_iterator;
-  {a.cend()} -> const std::random_access_iterator;
-  {a.rbegin()} -> std::reverse_iterator;
-  {a.crbegin()} -> const std::reverse_iterator;
-  {a.rend()} -> std::reverse_iterator;
-  {a.crend()} -> const std::reverse_iterator;
-};
+template <typename T, size_t align_size=alignof(std::remove_cvref_t<T>)> class AlignedDynamic;
+template <typename T, size_t N, size_t align_size=alignof(std::remove_cvref_t<T>)> class AlignedStatic;
 
 
-template <typename T, size_t align_size=alignof(T)>
+template <typename T>
+using AlignedDynamic64_t = AlignedDynamic<T, 64>;
+
+
+template <typename T, size_t align_size>
 class AlignedDynamic {
-  static_assert((align_size == sizeof(T)) ||
-                (align_size > sizeof(T) && align_size % sizeof(T) == 0) ||
-                (align_size < sizeof(T) && sizeof(T) % align_size == 0),
-                "AlignedDynamic requires type size and align_size to be divisible.");
-  std::unique_ptr<std::byte[]> raw;
-  T* array_data {nullptr};
-  size_t array_size {0};
-  size_t raw_total_bytes {0};
-
 public:
-  using value_type      = std::remove_cv_t<T>;
-  using reference       = T&;
-  using const_reference = const T&;
-  using pointer         = T*;
-  using const_pointer   = const T*;
+  using value_type      = std::remove_cvref_t<T>;
+  using reference       = value_type&;
+  using const_reference = const value_type&;
+  using pointer         = value_type*;
+  using const_pointer   = const value_type*;
   using iterator        = pointer;
   using const_iterator  = const_pointer;
   using riterator       = std::reverse_iterator<iterator>;
@@ -99,8 +78,17 @@ public:
   const_riterator crend(void) const noexcept { return rend(); }
 
 private:
+  static_assert((align_size == sizeof(value_type)) ||
+                (align_size > sizeof(value_type) && align_size % sizeof(value_type) == 0) ||
+                (align_size < sizeof(value_type) && sizeof(value_type) % align_size == 0),
+                "AlignedDynamic requires type size and align_size to be divisible.");
+  std::unique_ptr<std::byte[]> raw;
+  pointer_type array_data {nullptr};
+  size_t array_size {0};
+  size_t raw_total_bytes {0};
+
   size_t TotalBytesNeeded(size_t N) const noexcept {
-    size_t num_bytes = N * sizeof(T);
+    size_t num_bytes = N * sizeof(value_type);
     size_t delta = num_bytes % align_size;
     size_t padding = (delta > 0) ? align_size - delta : 0;
     // extra align_size allows for aligning pointer to start of data to align_size memory boundary
@@ -137,7 +125,7 @@ private:
     void* pt = raw.get();
     if (pt == nullptr) { return; }
     raw_total_bytes = total_bytes_needed;
-    array_data = std::assume_aligned<align_size>(static_cast<T*>(std::align(align_size, sizeof(T) * N, pt, raw_total_bytes)));
+    array_data = std::assume_aligned<align_size>(static_cast<pointer_type>(std::align(align_size, sizeof(value_type) * N, pt, total_bytes_needed)));
     array_size = N;
     return;
   }
@@ -150,7 +138,7 @@ private:
     size_t total_bytes_needed = TotalBytesNeeded(N);
     if (total_bytes_needed == raw_total_bytes || (!shrink_to_fit && total_bytes_needed < raw_total_bytes)) { array_size = N; return old_sizes; }
     std::unique_ptr<std::byte> tmp_raw {raw.release()};
-    T* tmp_array_data = std::assume_aligned<align_size>(array_data);
+    pointer_type tmp_array_data = std::assume_aligned<align_size>(array_data);
     Init(N);
     if (!array_size && N) {
       // Failed to allocate new data; reset to original data as if this function was not called.
@@ -167,28 +155,14 @@ private:
 };
 
 
-template <typename T, size_t N, size_t align_size=alignof(T)>
+template <typename T, size_t N, size_t align_size>
 class AlignedStatic {
-private:
-  static_assert((align_size == sizeof(T)) ||
-                (align_size > sizeof(T) && align_size % sizeof(T) == 0) ||
-                (align_size < sizeof(T) && sizeof(T) % align_size == 0),
-                "AlignedStatic requires type size and align_size to be divisible.");
-  static_assert(N > 0, "AlignedStatic of fixed size N cannot be zero.");
-
-  constexpr static size_t num_bytes_v = N * sizeof(T);
-  constexpr static size_t remaining_v = num_bytes_v % align_size;
-  constexpr static size_t padding_v = (remaining_v > 0) ? align_size - remaining_v : 0;
-  constexpr static size_t total_bytes_v = num_bytes_v + padding_v;
-
-  alignas(align_size) T array_data[N]{};
-
 public:
-  using value_type      = std::remove_cv_t<T>;
-  using reference       = T&;
-  using const_reference = const T&;
-  using pointer         = T*;
-  using const_pointer   = const T*;
+  using value_type      = std::remove_cvref_t<T>;
+  using reference       = value_type&;
+  using const_reference = const value_type&;
+  using pointer         = value_type*;
+  using const_pointer   = const value_type*;
   using iterator        = pointer;
   using const_iterator  = const_pointer;
   using riterator       = std::reverse_iterator<iterator>;
@@ -196,6 +170,21 @@ public:
   using difference_type = ptrdiff_t;
   using size_type       = size_t;
 
+private:
+  static_assert((align_size == sizeof(value_type)) ||
+                (align_size > sizeof(value_type) && align_size % sizeof(value_type) == 0) ||
+                (align_size < sizeof(value_type) && sizeof(value_type) % align_size == 0),
+                "AlignedStatic requires type size and align_size to be divisible.");
+  static_assert(N > 0, "AlignedStatic of fixed size N cannot be zero.");
+
+  constexpr static size_t num_bytes_v = N * sizeof(value_type);
+  constexpr static size_t remaining_v = num_bytes_v % align_size;
+  constexpr static size_t padding_v = (remaining_v > 0) ? align_size - remaining_v : 0;
+  constexpr static size_t total_bytes_v = num_bytes_v + padding_v;
+
+  alignas(align_size) value_type array_data[N]{};
+
+public:
   constexpr AlignedStatic(void) noexcept = default;
   constexpr AlignedStatic(AlignedStatic&&) noexcept = default;
   constexpr ~AlignedStatic(void) noexcept = default;
