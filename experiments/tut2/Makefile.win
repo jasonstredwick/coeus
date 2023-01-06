@@ -1,0 +1,29 @@
+CC = cl.exe
+LINK = link.exe
+CPPFLAGS = /std:c++latest /utf-8 /EHsc -I..\third_party\local\include -IC:\VulkanSDK\1.3.231.1\Include
+LDFLAGS = /SUBSYSTEM:CONSOLE /LIBPATH:..\third_party\local\lib /LIBPATH:C:\VulkanSDK\1.3.231.1\lib
+LIBS = DXGI.lib User32.lib Kernel32.lib vulkan-1.lib
+#      glfw3.lib
+DEPS = sys_window.hpp
+
+OBJS = main.obj
+EXES = tut2.exe
+SHDS = shaders\shader.frag.spv shaders\shader.vert.spv
+
+all: $(EXES)
+
+shaders\shader.frag.spv: shaders\shader.frag
+    C:\VulkanSDK\1.3.231.1\Bin\glslc.exe shaders\shader.frag -o shaders\shader.frag.spv
+
+shaders\shader.vert.spv: shaders\shader.vert
+    C:\VulkanSDK\1.3.231.1\Bin\glslc.exe shaders\shader.vert -o shaders\shader.vert.spv
+
+#.cpp.obj is a predefined rule ... includes /c so not needed in CPPFLAGS
+main.obj: main.cpp sys_window.hpp shaders\shader.frag.spv shaders\shader.vert.spv
+    $(CC) $(CPPFLAGS) /c main.cpp
+
+tut2.exe: $(OBJS)
+    $(LINK) $(LDFLAGS) $(OBJS) -out:tut2.exe $(LIBS)
+
+clean:
+    del $(EXES) $(OBJS) $(SHDS)
