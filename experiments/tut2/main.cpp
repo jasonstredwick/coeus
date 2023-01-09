@@ -13,8 +13,10 @@
 
 #include "jms/vulkan/render_info.hpp"
 #include "jms/vulkan/state.hpp"
-#include "sys_window.hpp"
 
+#if defined(_WIN32) || defined(_WIN64)
+#include "jms/sys_window/win.hpp"
+#endif
 
 void DrawFrame(const jms::vulkan::State& vulkan_state, const vk::raii::Buffer& vertex_buffer, const std::vector<Vertex>& vertices);
 
@@ -23,27 +25,23 @@ int main(char** argv, int argc) {
     char a = 0;
     std::cout << std::format("Start\n");
 
-    jms::SysWindow::SetHighDPI();
-    std::expected<jms::SysWindow, std::string> sys_window_result = jms::SysWindow::Create({});
-    if (!sys_window_result) {
-        std::cout << "Failed to create SysWindow.\n" << sys_window_result.error();
-        return 0;
-    }
-    jms::SysWindow sys_window{std::move(sys_window_result.value())};
-
-    // Vertex buffer
-    std::vector<Vertex> vertices = {
-        {{ 0.0f,  0.0f}, {1.0f, 0.0f, 0.0f}},
-        {{ 0.5f,  0.0f}, {0.0f, 1.0f, 0.0f}},
-        {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{ 0.0f,  0.5f}, {0.0f, 0.0f, 1.0f}},
-        {{ 0.0f,  0.0f}, {1.0f, 0.0f, 1.0f}}
-    };
-    size_t size_in_bytes = sizeof(Vertex) * vertices.size();
-
-    jms::vulkan::State vulkan_state{};
     try {
+        jms::SysWindow::SetHighDPI();
+        jms::SysWindow sys_window = jms::SysWindow::Create({});
+
+        // Vertex buffer
+        std::vector<Vertex> vertices = {
+            {{ 0.0f,  0.0f}, {1.0f, 0.0f, 0.0f}},
+            {{ 0.5f,  0.0f}, {0.0f, 1.0f, 0.0f}},
+            {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{ 0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{ 0.0f,  0.5f}, {0.0f, 0.0f, 1.0f}},
+            {{ 0.0f,  0.0f}, {1.0f, 0.0f, 1.0f}}
+        };
+        size_t size_in_bytes = sizeof(Vertex) * vertices.size();
+
+        jms::vulkan::State vulkan_state{};
+
         vulkan_state.InitInstance(jms::vulkan::InstanceConfig{
             .app_name=std::string{"tut2"},
             .engine_name=std::string{"tut2.e"},
@@ -108,16 +106,16 @@ int main(char** argv, int argc) {
         std::memcpy(data, vertices.data(), size_in_bytes);
         device_memory.unmapMemory();
         vulkan_state.buffers.at(0).bindMemory(*device_memory, 0);
+
+        DrawFrame(vulkan_state, vulkan_state.buffers.at(0), vertices);
+        vulkan_state.devices.at(0).waitIdle();
+
+        std::cout << "---------------------\n";
+        while (sys_window.ProcessEvents()) { ; }
+        //std::cin >> a;
     } catch (std::exception const& exp) {
         std::cout << "Exception caught\n" << exp.what() << std::endl;
     }
-
-    DrawFrame(vulkan_state, vulkan_state.buffers.at(0), vertices);
-    vulkan_state.devices.at(0).waitIdle();
-
-    std::cout << "---------------------\n";
-    while (sys_window.ProcessEvents()) { ; }
-    //std::cin >> a;
 
     std::cout << std::format("End\n");
     return 0;
