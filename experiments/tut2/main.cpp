@@ -1,3 +1,58 @@
+#if 0
+#include <windows.h>
+#include <vector>
+#include <iostream>
+#include "jms/vulkan/state.hpp"
+
+
+struct cMonitorsVec {
+    std::vector<int> iMonitors;
+    std::vector<HMONITOR> hMonitors;
+    std::vector<HDC> hdcMonitors;
+    std::vector<RECT> rcMonitors;
+    static BOOL CALLBACK MonitorEnum(HMONITOR hMon, HDC hdc, LPRECT lprcMonitor, LPARAM pData) {
+        cMonitorsVec* pThis = reinterpret_cast<cMonitorsVec*>(pData);
+        pThis->hMonitors.push_back(hMon);
+        pThis->hdcMonitors.push_back(hdc);
+        pThis->rcMonitors.push_back(*lprcMonitor);
+        pThis->iMonitors.push_back(pThis->hdcMonitors.size());
+        return TRUE;
+    }
+    cMonitorsVec() {
+        EnumDisplayMonitors(0, 0, MonitorEnum, (LPARAM)this);
+    }
+};
+
+
+#include <format>
+int main() {
+        if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+            auto error = GetLastError();
+            if (error != ERROR_ACCESS_DENIED) { // ERROR_ACCESS_DENIED == already set; ignore error
+                throw std::runtime_error(std::format("Failed to set dpi awareness: {}\n", error));
+            }
+        }
+    cMonitorsVec monitors{};
+    for (int i=0; i<monitors.iMonitors.size(); ++i) {
+        std::wcout << "Screen id: " << i << std::endl;
+        std::wcout << "---------------------------------------------------" << std::endl;
+        std::wcout << " - screen left top corner coords: (" << monitors.rcMonitors[i].left << ", " << monitors.rcMonitors[i].top << ")" << std::endl;
+        std::wcout << " - screen bottom right corner coords: (" << monitors.rcMonitors[i].right << ", " << monitors.rcMonitors[i].bottom << ")" << std::endl;
+        std::wcout << " - screen dims: (" << (monitors.rcMonitors[i].right - monitors.rcMonitors[i].left) << ", " <<
+                                             (monitors.rcMonitors[i].bottom - monitors.rcMonitors[i].top) << ")" << std::endl;
+        std::wcout << "---------------------------------------------------" << std::endl;
+    }
+    jms::vulkan::State vulkan_state{};
+    std::vector<vk::ExtensionProperties> extension_props = vulkan_state.context.enumerateInstanceExtensionProperties();
+    for (auto& i : extension_props) {
+        std::cout << i.extensionName << std::endl;
+    }
+    return 0;
+}
+#endif
+
+
+#if 1
 #include <array>
 #include <cstddef>
 #include <exception>
@@ -5,20 +60,59 @@
 #include <format>
 #include <iostream>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "jms/vulkan/include_config.hpp"
 #include <vulkan/vulkan_raii.hpp>
+#include <GLFW/glfw3.h>
 
 #include "jms/vulkan/render_info.hpp"
 #include "jms/vulkan/state.hpp"
 
 #if defined(_WIN32) || defined(_WIN64)
-#include "jms/sys_window/win.hpp"
+//#include "jms/sys_window/win.hpp"
 #endif
 
+
+vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance, const vk::raii::PhysicalDevice& physical_device);
 void DrawFrame(const jms::vulkan::State& vulkan_state, const vk::raii::Buffer& vertex_buffer, const std::vector<Vertex>& vertices);
+
+
+struct GLFWState {
+    std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window{nullptr, &glfwDestroyWindow};
+
+    GLFWState() { if (!glfwInit()) { throw std::runtime_error("Failed to initialize GLFW."); } }
+    GLFWState(const GLFWState&) = delete;
+    GLFWState(GLFWState&&) = default;
+    ~GLFWState() { glfwTerminate(); }
+    GLFWState& operator=(const GLFWState&) = delete;
+    GLFWState& operator=(GLFWState&&) = default;
+
+    void DefaultCreate(int width, int height, GLFWmonitor* monitor=nullptr) {
+        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+        window.reset(glfwCreateWindow(width, height, "", monitor, nullptr));
+    }
+
+    std::vector<std::string> GetInstanceExtensions() {
+        uint32_t count = 0;
+        const char** exts = glfwGetRequiredInstanceExtensions(&count);
+        std::vector<std::string> out{};
+        for (int i=0; i< count; ++i) {
+            out.push_back(std::string{exts[i]});
+        }
+        return out;
+    }
+
+    vk::raii::SurfaceKHR CreateSurface(const vk::raii::Instance& instance, const VkAllocationCallbacks* allocator=nullptr) {
+        VkSurfaceKHR surface = nullptr;
+        glfwCreateWindowSurface(*instance, window.get(), allocator, &surface);
+        return vk::raii::SurfaceKHR{instance, surface, *allocator};
+    }
+};
 
 
 int main(char** argv, int argc) {
@@ -26,8 +120,7 @@ int main(char** argv, int argc) {
     std::cout << std::format("Start\n");
 
     try {
-        jms::SysWindow::SetHighDPI();
-        jms::SysWindow sys_window = jms::SysWindow::Create({});
+        //jms::SysWindow sys_window = jms::SysWindow::Create({});
 
         // Vertex buffer
         std::vector<Vertex> vertices = {
@@ -42,6 +135,22 @@ int main(char** argv, int argc) {
 
         jms::vulkan::State vulkan_state{};
 
+        GLFWState glfw_state{};
+        glfw_state.DefaultCreate(1024, 768);
+        std::vector<std::string> window_instance_extensions= glfw_state.GetInstanceExtensions();
+
+        std::vector<std::string> required_instance_extensions{
+            /* VK_KHR_display
+            std::string{VK_KHR_DISPLAY_EXTENSION_NAME},
+            std::string{VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME},
+            std::string{VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME}
+            */
+        };
+        std::set<std::string> instance_extensions_set{window_instance_extensions.begin(),
+                                                      window_instance_extensions.end()};
+        for (auto& i : required_instance_extensions) { instance_extensions_set.insert(i); }
+        std::vector<std::string> instance_extensions{instance_extensions_set.begin(), instance_extensions_set.end()};
+
         vulkan_state.InitInstance(jms::vulkan::InstanceConfig{
             .app_name=std::string{"tut2"},
             .engine_name=std::string{"tut2.e"},
@@ -49,21 +158,15 @@ int main(char** argv, int argc) {
                 std::string{"VK_LAYER_KHRONOS_synchronization2"},
                 std::string{"VK_LAYER_KHRONOS_validation"}
             },
-            .extension_names={
-                std::string{VK_KHR_SURFACE_EXTENSION_NAME},
-                std::string{VK_KHR_WIN32_SURFACE_EXTENSION_NAME}
-            }
+            .extension_names=instance_extensions
         });
 
         // Create surface; must happen after instance creation, but before examining/creating devices.
         // will be moved from
-        vulkan_state.surface = vulkan_state.instance.createWin32SurfaceKHR({
-            .flags=vk::Win32SurfaceCreateFlagsKHR(),
-            .hinstance=sys_window.GetInstance(),
-            .hwnd=sys_window.GetHWND()
-        });
+        vulkan_state.surface = glfw_state.CreateSurface(*vulkan_state.instance);
 
         vk::raii::PhysicalDevice& physical_device = vulkan_state.physical_devices.at(0);
+        //vulkan_state.surface = CreateDisplaySurface(vulkan_state.instance, physical_device);
         auto dims = sys_window.GetDims();
         auto width = dims[0];
         auto height = dims[1];
@@ -79,7 +182,8 @@ int main(char** argv, int argc) {
             //    std::string{"VK_LAYER_KHRONOS_validation"} // deprecated; but may still need for validation?
             //},
             .extension_names={
-                std::string{VK_KHR_SWAPCHAIN_EXTENSION_NAME}
+                std::string{VK_KHR_SWAPCHAIN_EXTENSION_NAME}//,
+                //std::string{"VK_KHR_portability_subset"}  // VK_KHR_display
             },
             //.features=physical_device.getFeatures(),
             .queue_infos=std::move(std::vector<vk::DeviceQueueCreateInfo>{
@@ -117,8 +221,102 @@ int main(char** argv, int argc) {
         std::cout << "Exception caught\n" << exp.what() << std::endl;
     }
 
+    glfwTerminate();
+
     std::cout << std::format("End\n");
     return 0;
+}
+
+
+vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance,
+                                          const vk::raii::PhysicalDevice& physical_device) {
+    auto display_properties_return = physical_device.getDisplayPropertiesKHR();
+    if (!display_properties_return.size()) {
+        throw std::runtime_error("No non-managed displays available.");
+    }
+    auto display = display_properties_return.at(0).display;
+    auto display_mode_props_return = (*physical_device).getDisplayModePropertiesKHR(display);
+
+    if (display_mode_props_return.size() == 0) {
+        printf("Cannot find any mode for the display!\n");
+        fflush(stdout);
+        exit(1);
+    }
+    auto display_mode_prop = display_mode_props_return.at(0);
+
+    // Get the list of planes
+    auto display_plane_props = physical_device.getDisplayPlanePropertiesKHR();
+    if (display_plane_props.size() == 0) {
+        printf("Cannot find any plane!\n");
+        fflush(stdout);
+        exit(1);
+    }
+
+    vk::Bool32 found_plane = VK_FALSE;
+    uint32_t plane_found = 0;
+    // Find a plane compatible with the display
+    for (uint32_t plane_index = 0; plane_index < display_plane_props.size(); plane_index++) {
+        // Disqualify planes that are bound to a different display
+        if (display_plane_props[plane_index].currentDisplay && (display_plane_props[plane_index].currentDisplay != display)) {
+            continue;
+        }
+
+        auto display_plane_supported_displays_return = physical_device.getDisplayPlaneSupportedDisplaysKHR(plane_index);
+        if (display_plane_supported_displays_return.size() == 0) {
+            continue;
+        }
+
+        for (const auto &supported_display : display_plane_supported_displays_return) {
+            if (*supported_display == display) {
+                found_plane = VK_TRUE;
+                plane_found = plane_index;
+                break;
+            }
+        }
+
+        if (found_plane) {
+            break;
+        }
+    }
+
+    if (!found_plane) {
+        printf("Cannot find a plane compatible with the display!\n");
+        fflush(stdout);
+        exit(1);
+    }
+
+    vk::DisplayPlaneCapabilitiesKHR planeCaps =
+        (*physical_device).getDisplayPlaneCapabilitiesKHR(display_mode_prop.displayMode, plane_found);
+    // Find a supported alpha mode
+    vk::DisplayPlaneAlphaFlagBitsKHR alphaMode = vk::DisplayPlaneAlphaFlagBitsKHR::eOpaque;
+    std::array<vk::DisplayPlaneAlphaFlagBitsKHR, 4> alphaModes = {
+        vk::DisplayPlaneAlphaFlagBitsKHR::eOpaque,
+        vk::DisplayPlaneAlphaFlagBitsKHR::eGlobal,
+        vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixel,
+        vk::DisplayPlaneAlphaFlagBitsKHR::ePerPixelPremultiplied,
+    };
+    for (const auto &alpha_mode : alphaModes) {
+        if (planeCaps.supportedAlpha & alpha_mode) {
+            alphaMode = alpha_mode;
+            break;
+        }
+    }
+
+    vk::Extent2D image_extent{
+        .width=display_mode_prop.parameters.visibleRegion.width,
+        .height=display_mode_prop.parameters.visibleRegion.height
+    };
+
+    vk::raii::SurfaceKHR surface{instance, vk::DisplaySurfaceCreateInfoKHR{
+        .displayMode=display_mode_prop.displayMode,
+        .planeIndex=plane_found,
+        .planeStackIndex=display_plane_props[plane_found].currentStackIndex,
+        .globalAlpha=1.0f,
+        .alphaMode=alphaMode,
+        .imageExtent=image_extent
+    }};
+
+    return surface;
 }
 
 
@@ -189,3 +387,4 @@ void DrawFrame(const jms::vulkan::State& vulkan_state, const vk::raii::Buffer& v
         .pResults=nullptr
     });
 }
+#endif

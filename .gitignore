@@ -1,6 +1,9 @@
 .vscode
 a.out
 **/*.o
+**/*.obj
+**/*.exe
+**/*.spv
 **/*.s
 dist/**
 !dist/.placeholder
