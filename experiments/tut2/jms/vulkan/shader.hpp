@@ -2,7 +2,8 @@
 
 
 #include <exception>
-#include <format>
+//#include <format>
+#include <fmt/core.h>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -19,11 +20,11 @@ namespace shader {
 
 vk::raii::ShaderModule Load(const std::filesystem::path& path, const vk::raii::Device& device) {
     if (!std::filesystem::exists(path)) {
-        throw std::runtime_error(std::format("Shader file does not exist: {}\n", path.string()));
+        throw std::runtime_error(fmt::format("Shader file does not exist: {}\n", path.string()));
     }
     std::ifstream file{path, std::ios::ate | std::ios::binary};
     if (!file.is_open()) {
-        throw std::runtime_error(std::format("Filed to open shader file: {}\n", path.string()));
+        throw std::runtime_error(fmt::format("Filed to open shader file: {}\n", path.string()));
     }
     file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
     size_t num_bytes = static_cast<size_t>(file.tellg());
@@ -33,7 +34,7 @@ vk::raii::ShaderModule Load(const std::filesystem::path& path, const vk::raii::D
     file.seekg(0);
     file.read(reinterpret_cast<char*>(buffer.data()), num_bytes);
     if (buffer.empty()) {
-        throw std::runtime_error(std::format("Shader has no code; i.e. empty: {}\n", path.string()));
+        throw std::runtime_error(fmt::format("Shader has no code; i.e. empty: {}\n", path.string()));
     }
     return vk::raii::ShaderModule(device, vk::ShaderModuleCreateInfo{
         .codeSize=total_bytes,

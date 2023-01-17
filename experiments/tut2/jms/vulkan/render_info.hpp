@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <exception>
-#include <format>
 #include <limits>
 
 #include "include_config.hpp"
@@ -28,7 +27,7 @@ struct RenderInfo {
 RenderInfo SurfaceInfo(const vk::raii::SurfaceKHR& surface, const vk::raii::PhysicalDevice& physical_device,
                        uint32_t client_width, uint32_t client_height) {
     auto surface_formats_vec = physical_device.getSurfaceFormatsKHR(*surface);
-    if (surface_formats_vec.empty()) { throw std::runtime_error(std::format("No formats found for surface.\n")); }
+    if (surface_formats_vec.empty()) { throw std::runtime_error("No formats found for surface."); }
 
     vk::SurfaceFormatKHR surface_format{surface_formats_vec[0]};
     auto color_space_comp = [](auto& i) {
@@ -50,7 +49,7 @@ RenderInfo SurfaceInfo(const vk::raii::SurfaceKHR& surface, const vk::raii::Phys
     vk::SurfaceCapabilitiesKHR surface_caps = physical_device.getSurfaceCapabilitiesKHR(*surface);
     vk::Extent2D extent = surface_caps.currentExtent;
     if (extent.width == std::numeric_limits<uint32_t>::max()) {
-        if (client_width == 0) { throw std::runtime_error(std::format("Failed to get window dimensions.\n")); }
+        if (client_width == 0) { throw std::runtime_error("Failed to get window dimensions."); }
         extent.width = std::clamp(static_cast<uint32_t>(client_width),
                                   surface_caps.minImageExtent.width,
                                   surface_caps.maxImageExtent.width);

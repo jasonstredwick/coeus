@@ -1,0 +1,29 @@
+CC = g++
+LINK = g++
+GLSLC = glslc
+CPPFLAGS = -std=c++23
+LDFLAGS = 
+LIBS = -lvulkan -lglfw -lfmt
+DEPS = sys_window.hpp
+
+OBJS = main.o
+EXES = tut2.exe
+SHDS = shaders/shader.frag.spv shaders/shader.vert.spv
+
+all: $(EXES)
+
+shaders/shader.frag.spv: shaders/shader.frag
+	$(GLSLC) shaders/shader.frag -o shaders/shader.frag.spv
+
+shaders/shader.vert.spv: shaders/shader.vert
+	$(GLSLC) shaders/shader.vert -o shaders/shader.vert.spv
+
+#.cpp.obj is a predefined rule ... includes /c so not needed in CPPFLAGS
+main.o: main.cpp sys_window.hpp $(SHDS)
+	$(CC) $(CPPFLAGS) -c main.cpp
+
+tut2.exe: $(OBJS)
+	$(LINK) $(LDFLAGS) $(OBJS) -o tut2.exe $(LIBS)
+
+clean:
+	rm -f $(EXES) $(OBJS) $(SHDS)
