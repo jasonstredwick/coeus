@@ -2,8 +2,11 @@
 #include <cstddef>
 #include <exception>
 #include <expected>
-//#include <format>
+#if defined(_GNUG_)
 #include <fmt/core.h>
+#else
+#include <format>
+#endif
 #include <iostream>
 #include <memory>
 #include <set>
@@ -81,7 +84,11 @@ struct GLFWState {
 
 int main(int argc, char** argv) {
     char a = 0;
+#if defined(_GNUG_)
     std::cout << fmt::format("Start\n");
+#else
+    std::cout << std::format("Start\n");
+#endif
 
     try {
         //jms::SysWindow sys_window = jms::SysWindow::Create({});
@@ -188,7 +195,11 @@ int main(int argc, char** argv) {
 
     glfwTerminate();
 
+#if defined(_GNUG_)
     std::cout << fmt::format("End\n");
+#else
+    std::cout << std::format("End\n");
+#endif
     return 0;
 }
 

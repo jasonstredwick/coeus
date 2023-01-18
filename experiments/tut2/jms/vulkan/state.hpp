@@ -1,7 +1,10 @@
 #include <algorithm>
 #include <exception>
-//#include <format>
+#if defined(_GNUG_)
 #include <fmt/core.h>
+#else
+#include <format>
+#endif
 #include <iterator>
 #include <optional>
 #include <ranges>
@@ -164,7 +167,11 @@ void State::InitInstance(InstanceConfig&& cfg) {
     if (instance_config.debug.has_value()) { requested_layer_names.insert(std::string{"VK_LAYER_KHRONOS_validation"}); }
     for (auto& i : requested_layer_names) {
         if (!layer_names.contains(i)) {
+#if defined(_GNUG_)
             throw std::runtime_error(fmt::format("Requested layer \"{}\" not available.", i));
+#else
+            throw std::runtime_error(std::format("Requested layer \"{}\" not available.", i));
+#endif
         }
     }
 
@@ -174,7 +181,11 @@ void State::InitInstance(InstanceConfig&& cfg) {
                             [](auto& i) -> std::string { return i.extensionName; });
     for (auto& i : instance_config.extension_names) {
         if (!extension_names.contains(i)) {
+#if defined(_GNUG_)
             throw std::runtime_error(fmt::format("Requested instance extension \"{}\" not available.", i));
+#else
+            throw std::runtime_error(std::format("Requested instance extension \"{}\" not available.", i));
+#endif
         }
     }
 
@@ -228,7 +239,11 @@ void State::InitMemory(const size_t size_in_bytes,
         if ((1 << i) & vertex_mem_type_filter && prop_check == desired_props) { memory_type_index = i; }
     }
     if (memory_type_index == physical_device_mem_props.memoryTypeCount) {
+#if defined(_GNUG_)
         throw std::runtime_error(fmt::format("Failed to find the appropriate memory type on physical device.\n"));
+#else
+        throw std::runtime_error(std::format("Failed to find the appropriate memory type on physical device.\n"));
+#endif
     }
 
     device_memory.push_back(device.allocateMemory({

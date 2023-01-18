@@ -2,26 +2,25 @@
 
 
 #include <array>
-#include <iostream> //temp
 #include <format>
 #include <memory>
-#include <new>
 #include <string>
 
 #include <windows.h>
 #undef min
 #undef max
 
-#include "config.hpp"
+
+#include "interface.hpp"
 
 
 namespace jms {
 
 
-class SysWindow {
+class SysWindow : public SysWindowInterface {
 private:
-    struct MsgInterface {
-        HWND hwnd{nullptr};
+    struct State {
+        HWND handle{nullptr};
         LRESULT OnCreate() noexcept { return 0; }
         LRESULT OnDPIChanged(WPARAM wparam, LPARAM lparam) noexcept {
             int y_dpi = HIWORD(wparam);
@@ -37,16 +36,21 @@ private:
             return 0;
         }
         LRESULT OnGetMinMaxInfo(LPARAM lparam) noexcept { return 0; }
-        LRESULT OnPaint() noexcept { std::cout << "Paint\n"; ValidateRect(hwnd, nullptr); return 0; }
+        LRESULT OnPaint() noexcept { ValidateRect(handle, nullptr); return 0; }
         LRESULT OnSize() noexcept { /*resize swapchain*/return 0; }
     };
 
-    inline static const SysWindowConfigOptions_title_t WNDCLASS_NAME{L"jms__SysWindow__WndClassEx__"};
-    std::unique_ptr<MsgInterface> msg_interface{nullptr};
-    std::unique_ptr<HWND__, decltype([](HWND__* hwnd){DestroyWindow(hwnd);})> handle{nullptr};
+#ifdef UNICODE
+    inline static const std::wstring WNDCLASS_NAME{L"jms__SysWindow__WndClassEx__"};
+    inline static const std::wstring TITLE{L""};
+#else
+    inline static const std::string WNDCLASS_NAME{"jms__SysWindow__WndClassEx__"};
+    inline static const std::string TITLE{""};
+#endif
+    // REQUIRED: pointer address cannot change between move operations for WndProc; pointer would point to from obj
+    std::unique_ptr<State> state{nullptr};
+    std::unique_ptr<HWND__, decltype([](HWND__* hwnd){ DestroyWindow(hwnd); })> handle{nullptr};
     WNDCLASSEX wnd_class{.cbSize=sizeof(WNDCLASSEX)};
-
-    SysWindow() noexcept = default;
 
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam) noexcept {
         // WM_DESTROY is called separately because WndProc may be called by destructor and thus the
@@ -57,90 +61,82 @@ private:
             return 0;
         }
 
-        MsgInterface* msg_interface = nullptr;
+        State* state = nullptr;
         if (umsg == WM_NCCREATE) {
             LPCREATESTRUCT create_struct = reinterpret_cast<LPCREATESTRUCT>(lparam);
-            msg_interface = reinterpret_cast<MsgInterface*>(create_struct->lpCreateParams);
-            SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(msg_interface));
+            state = reinterpret_cast<State*>(create_struct->lpCreateParams);
+            SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
         } else {
-            msg_interface = reinterpret_cast<MsgInterface*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+            state = reinterpret_cast<State*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
         }
 
-        if (msg_interface) {
+        if (state) {
             switch (umsg) {
-            case WM_PAINT: return msg_interface->OnPaint();
-            //case WM_CREATE: return msg_interface->OnCreate();
-            //case WM_DPICHANGED: return msg_interface->OnDPIChanged(wparam, lparam);
-            //case WM_GETMINMAXINFO: return msg_interface->OnGetMinMaxInfo(lparam);
-            //case WM_SIZE: return msg_interface->OnSize();
+            case WM_PAINT: return state->OnPaint();
+            //case WM_CREATE: return state->OnCreate();
+            //case WM_DPICHANGED: return state->OnDPIChanged(wparam, lparam);
+            //case WM_GETMINMAXINFO: return state->OnGetMinMaxInfo(lparam);
+            //case WM_SIZE: return state->OnSize();
             }
         }
+
         return DefWindowProc(hwnd, umsg, wparam, lparam);
     }
 
 public:
+    SysWindow() = default;
     SysWindow(const SysWindow&) = delete;
     SysWindow(SysWindow&& t) = default;
     ~SysWindow() = default;
     SysWindow& operator=(const SysWindow&) = delete;
     SysWindow& operator=(SysWindow&&) = default;
 
-    static SysWindow Create(SysWindowConfigOptions&& options) noexcept {
-        SysWindow sys_window{};
-
-        sys_window.msg_interface.reset(new(std::nothrow) MsgInterface{});
-        if (!sys_window.msg_interface) {
-            throw std::runtime_error(std::format("Failed to create message handling interface\n"));
+    void Create(const uint32_t width_pixel, const uint32_t height_pixel,
+                const int32_t pos_x_pixel=0, const int32_t pos_y_pixel=0) override {
+        // Prevent Windows from auto stretching content; just want a raw rectangle of pixels
+        if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
+            auto error = GetLastError();
+            if (error != ERROR_ACCESS_DENIED) { // ERROR_ACCESS_DENIED == already set; ignore error
+                throw std::runtime_error(std::format("Failed to set dpi awareness: {}\n", error));
+            }
         }
 
         auto root_handle = GetModuleHandle(nullptr);
-        if (!GetClassInfoEx(root_handle, WNDCLASS_NAME.c_str(), &sys_window.wnd_class)) {
-            sys_window.wnd_class.lpfnWndProc = WndProc;
-            sys_window.wnd_class.hInstance = root_handle;
-            sys_window.wnd_class.lpszClassName = WNDCLASS_NAME.c_str();
-            if (!RegisterClassEx(&sys_window.wnd_class)) {
-                throw std::runtime_error(std::format("Failed to register class: {}\n", GetLastError()));
+
+        if (!GetClassInfoEx(root_handle, WNDCLASS_NAME.c_str(), &wnd_class)) {
+            wnd_class.lpfnWndProc = WndProc;
+            wnd_class.hInstance = root_handle;
+            wnd_class.lpszClassName = WNDCLASS_NAME.c_str();
+            if (!RegisterClassEx(&wnd_class)) {
+                throw std::runtime_error(
+                    std::format("Failed to register class {}: {}\n", WNDCLASS_NAME, GetLastError()));
             }
         }
 
-        sys_window.handle.reset(CreateWindowEx(
+        handle.reset(CreateWindowEx(
             0,
-            sys_window.wnd_class.lpszClassName,
-            options.title.empty() ? SysWindowConfigOptions_title_t{}.c_str() : options.title.c_str(),
-            WS_OVERLAPPEDWINDOW,
-            options.x < 0 ? CW_USEDEFAULT : options.x,
-            options.y < 0 ? CW_USEDEFAULT : options.y,
-            options.width <= 0 ? CW_USEDEFAULT : std::min(options.width, 640),
-            options.height <= 0 ? CW_USEDEFAULT : std::min(options.height, 480),
+            wnd_class.lpszClassName,
+            TITLE.c_str(),
+            0, //WS_VISIBLE, //WS_OVERLAPPEDWINDOW,
+            static_cast<int>(pos_x_pixel),
+            static_cast<int>(pos_y_pixel),
+            static_cast<int>(width_pixel),
+            static_cast<int>(height_pixel),
             nullptr, // parent window
             nullptr, // menu
             root_handle,
-            static_cast<void*>(sys_window.msg_interface.get()) // additional application data
+            static_cast<void*>(state.get()) // additional application data
         ));
-        if (!sys_window.handle) {
+        if (!handle) {
             throw std::runtime_error(std::format("Failed to create window: {}\n", GetLastError()));
         } else {
-            sys_window.msg_interface.get()->hwnd = sys_window.handle.get();
+            state.get()->handle = handle.get();
         }
 
-        ShowWindow(sys_window.handle.get(), SW_SHOW);
-        SetForegroundWindow(sys_window.handle.get());
-        SetFocus(sys_window.handle.get());
-        UpdateWindow(sys_window.handle.get());
-
-        return sys_window;
-    }
-
-    static void SetHighDPI() noexcept {
-        if (!SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2)) {
-            auto error = GetLastError();
-            if (error == ERROR_ACCESS_DENIED) {
-                std::cout << "DPI already set\n";
-            } else {
-                std::cout << std::format("Failed to set dpi awareness: {}\n", error);
-            }
-        }
-        std::cout << "High DPI awareness set\n";
+        ShowWindow(handle.get(), SW_SHOW);
+        SetForegroundWindow(handle.get());
+        SetFocus(handle.get());
+        UpdateWindow(handle.get());
     }
 
     bool ProcessEvents() noexcept {
@@ -170,3 +166,27 @@ public:
 
 
 }
+
+
+#if 0
+    struct MsgInterface {
+        HWND hwnd{nullptr};
+        LRESULT OnCreate() noexcept { return 0; }
+        LRESULT OnDPIChanged(WPARAM wparam, LPARAM lparam) noexcept {
+            int y_dpi = HIWORD(wparam);
+            int x_dpi = LOWORD(wparam);
+            RECT rect{*reinterpret_cast<RECT* const>(lparam)};
+            int suggested_left = rect.left;
+            int suggested_top = rect.top;
+            int suggested_width = rect.right - rect.left;
+            int suggested_height = rect.bottom - rect.top;
+            auto possible_set_window_pos_flags = SWP_NOZORDER | SWP_NOACTIVATE;
+            auto default_scaled_y = static_cast<double>(y_dpi) / USER_DEFAULT_SCREEN_DPI;
+            auto default_scaled_x = static_cast<double>(x_dpi) / USER_DEFAULT_SCREEN_DPI;
+            return 0;
+        }
+        LRESULT OnGetMinMaxInfo(LPARAM lparam) noexcept { return 0; }
+        LRESULT OnPaint() noexcept { std::cout << "Paint\n"; ValidateRect(hwnd, nullptr); return 0; }
+        LRESULT OnSize() noexcept { /*resize swapchain*/return 0; }
+    };
+#endif

@@ -1,8 +1,8 @@
 CC = cl.exe
 LINK = link.exe
+GLSLC = C:\VulkanSDK\1.3.231.1\Bin\glslc.exe
 CPPFLAGS = /std:c++latest /utf-8 /EHsc -IC:\Users\jason\code\third_party\local\include -IC:\VulkanSDK\1.3.231.1\Include
 LDFLAGS = /SUBSYSTEM:CONSOLE /LIBPATH:C:\Users\jason\code\third_party\local\lib /LIBPATH:C:\VulkanSDK\1.3.231.1\lib
-#LIBS = DXGI.lib User32.lib Kernel32.lib vulkan-1.lib glfw3.lib
 LIBS = User32.lib Kernel32.lib Gdi32.lib Shell32.lib vulkan-1.lib glfw3_mt.lib
 DEPS = sys_window.hpp
 
@@ -13,10 +13,10 @@ SHDS = shaders\shader.frag.spv shaders\shader.vert.spv
 all: $(EXES)
 
 shaders\shader.frag.spv: shaders\shader.frag
-    C:\VulkanSDK\1.3.231.1\Bin\glslc.exe shaders\shader.frag -o shaders\shader.frag.spv
+    $(GLSLC) shaders\shader.frag -o shaders\shader.frag.spv
 
 shaders\shader.vert.spv: shaders\shader.vert
-    C:\VulkanSDK\1.3.231.1\Bin\glslc.exe shaders\shader.vert -o shaders\shader.vert.spv
+    $(GLSLC) shaders\shader.vert -o shaders\shader.vert.spv
 
 #.cpp.obj is a predefined rule ... includes /c so not needed in CPPFLAGS
 main.obj: main.cpp sys_window.hpp shaders\shader.frag.spv shaders\shader.vert.spv
