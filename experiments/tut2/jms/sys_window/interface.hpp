@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <vector>
 
 
 struct SysWindowInterface{
@@ -14,3 +15,10 @@ struct SysWindowInterface{
     virtual std::array<uint32_t, 2> Dims_WH() const noexcept = 0;
     virtual std::array<int32_t, 2>  Pos_XY() const noexcept = 0;
 };
+
+
+struct Monitor{};
+
+
+std::vector<Monitor> EnumerateMonitors() noexcept;
+template <typename T> Monitor MonitorDetails(T const& obj) noexcept;

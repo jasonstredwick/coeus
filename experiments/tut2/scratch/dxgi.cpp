@@ -1,3 +1,8 @@
+#include <format>
+#include <iostream>
+#include <memory>
+#include <vector>
+
 #if defined(_WIN32) || defined(_WIN64)
 #include <windows.h>
 #include <dxgi1_6.h>
@@ -18,7 +23,7 @@ void DXGIEnumAdapters() {//HWND hwnd) {
 
     IDXGIFactory_t* factory_raw = nullptr;
     HRESULT result = CreateDXGIFactory2(0, __uuidof(IDXGIFactory_t), reinterpret_cast<void**>(&factory_raw));
-    if (result) { std::wcout << std::format(L"Failed to create DXGIFactory2: {}\n", result); return; }
+    if (result) { std::cout << std::format("Failed to create DXGIFactory2: {}\n", result); return; }
     OwnedFactory_t factory{factory_raw};
 
     unsigned int index = 0;
@@ -27,7 +32,7 @@ void DXGIEnumAdapters() {//HWND hwnd) {
     for (unsigned int index=0; factory->EnumAdapters1(index, &adapter_raw) != DXGI_ERROR_NOT_FOUND; ++index) {
         IDXGIAdapter_t* adapter = nullptr;
         result = adapter_raw->QueryInterface(__uuidof(IDXGIAdapter_t), reinterpret_cast<void**>(&adapter));
-        if (result) { std::wcout << std::format(L"Failed to cast IDXGIAdapter Interface: {}\n", result); return; }
+        if (result) { std::cout << std::format("Failed to cast IDXGIAdapter Interface: {}\n", result); return; }
         adapters.push_back(OwnedAdapter_t{adapter});
     }
 
@@ -38,7 +43,7 @@ void DXGIEnumAdapters() {//HWND hwnd) {
         for (unsigned int index=0; adapter->EnumOutputs(index, &output_raw) != DXGI_ERROR_NOT_FOUND; ++index) {
             IDXGIOutput_t* output = nullptr;
             result = output_raw->QueryInterface(__uuidof(IDXGIOutput_t), reinterpret_cast<void**>(&output));
-            if (result) { std::wcout << std::format(L"Failed to cast IDXGIOutput Interface: {}\n", result); return; }
+            if (result) { std::cout << std::format("Failed to cast IDXGIOutput Interface: {}\n", result); return; }
             outputs.push_back(OwnedOutput_t{output});
         }
         adapter_outputs.push_back(std::move(outputs));
@@ -50,13 +55,13 @@ void DXGIEnumAdapters() {//HWND hwnd) {
 
         DXGI_ADAPTER_DESC1 desc{};
         adapter->GetDesc1(&desc);
-        std::wcout << std::format(L"Adapter {}\n", desc.Description);
-        std::wcout << L"Outputs-\n";
+        std::cout << std::format("Adapter {}\n", desc.Description);
+        std::cout << "Outputs-\n";
         for (auto& output : outputs) {
             DXGI_OUTPUT_DESC desc{};
             output->GetDesc(&desc);
             std::wcout << desc.DeviceName << std::endl;
-            std::wcout << std::endl;
+            std::cout << std::endl;
         }
         std::wcout << std::endl;
     }

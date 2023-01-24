@@ -1,12 +1,12 @@
 CC = cl.exe
 LINK = link.exe
 GLSLC = C:\VulkanSDK\1.3.231.1\Bin\glslc.exe
-CPPFLAGS = /std:c++latest /utf-8 /EHsc -IC:\Users\jason\code\third_party\local\include -IC:\VulkanSDK\1.3.231.1\Include
+CPPFLAGS = /std:c++latest /utf-8 /EHsc -IC:\Users\jason\code\third_party\local\include -IC:\VulkanSDK\1.3.231.1\Include -I.
 LDFLAGS = /SUBSYSTEM:CONSOLE /LIBPATH:C:\Users\jason\code\third_party\local\lib /LIBPATH:C:\VulkanSDK\1.3.231.1\lib
 LIBS = User32.lib Kernel32.lib Gdi32.lib Shell32.lib vulkan-1.lib glfw3_mt.lib
 DEPS = sys_window.hpp
 
-OBJS = main.obj
+OBJS = jms_wsi_glfw.obj main.obj
 EXES = tut2.exe
 SHDS = shaders\shader.frag.spv shaders\shader.vert.spv
 
@@ -17,6 +17,9 @@ shaders\shader.frag.spv: shaders\shader.frag
 
 shaders\shader.vert.spv: shaders\shader.vert
     $(GLSLC) shaders\shader.vert -o shaders\shader.vert.spv
+
+jms_wsi_glfw.obj: jms/wsi/glfw.cpp jms/vulkan/include_config.hpp jms/wsi/glfw.hpp
+    $(CC) $(CPPFLAGS) /c /DVK_USE_PLATFORM_WIN32_KHR jms/wsi/glfw.cpp /Fojms_wsi_glfw.obj
 
 #.cpp.obj is a predefined rule ... includes /c so not needed in CPPFLAGS
 main.obj: main.cpp sys_window.hpp shaders\shader.frag.spv shaders\shader.vert.spv

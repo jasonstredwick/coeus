@@ -1,0 +1,10 @@
+Thinking of this as an alternative window manager.  To that end, do I only need to control the entire screen?
+I think at this point it is most productive to enter full screen mode where the OS/window managers give more
+control over the system rather than use through a compositor.  While this requires many working components, I
+would like to reduce the visibility of each component from the other.  Maybe I can use concepts and/or abstract
+base class interfaces to achieve this?
+
+Decided: Use Vulkan as primary rendering layer
+Undecided: GLFW or custom thin layer over OS window managers.  If the latter then only the minimum support from
+an OS is required; for example only XCB/XLIB instead of Wayland.
+I would like to seperate the windowing/display from the input and system services.

@@ -13,10 +13,10 @@ namespace jms {
 namespace vulkan {
 
 
-VKAPI_ATTR VkBool32 VKAPI_CALL DebugMessage_count(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
-                                                  VkDebugUtilsMessageTypeFlagsEXT msg_type,
-                                                  VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
-                                                  void* user_data) {
+VKAPI_ATTR VkBool32 VKAPI_CALL DebugMessage_cout(VkDebugUtilsMessageSeverityFlagBitsEXT msg_severity,
+                                                 VkDebugUtilsMessageTypeFlagsEXT msg_type,
+                                                 VkDebugUtilsMessengerCallbackDataEXT const* callback_data,
+                                                 void* user_data) {
     auto& out = std::cout;
     out << std::format("{} ({}): {} {}\n{}\n",
         vk::to_string(static_cast<vk::DebugUtilsMessageSeverityFlagBitsEXT>(msg_severity)),

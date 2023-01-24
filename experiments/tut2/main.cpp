@@ -1,4 +1,5 @@
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <exception>
 #include <expected>
@@ -15,71 +16,21 @@
 
 #include "jms/vulkan/include_config.hpp"
 #include <vulkan/vulkan_raii.hpp>
-#include <GLFW/glfw3.h>
+#include "jms/wsi/glfw.hpp"
 
 #include "jms/vulkan/render_info.hpp"
 #include "jms/vulkan/state.hpp"
 
-#if defined(_WIN32) || defined(_WIN64)
-//#include "jms/sys_window/win.hpp"
-#endif
 
-
-vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance, const vk::raii::PhysicalDevice& physical_device);
+//vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance, const vk::raii::PhysicalDevice& physical_device);
 void DrawFrame(const jms::vulkan::State& vulkan_state, const vk::raii::Buffer& vertex_buffer, const std::vector<Vertex>& vertices);
 
 
-struct GLFWState {
-    std::unique_ptr<GLFWwindow, decltype(&glfwDestroyWindow)> window{nullptr, &glfwDestroyWindow};
-
-    GLFWState() { if (!glfwInit()) { throw std::runtime_error("Failed to initialize GLFW."); } }
-    GLFWState(const GLFWState&) = delete;
-    GLFWState(GLFWState&&) = default;
-    ~GLFWState() { glfwTerminate(); }
-    GLFWState& operator=(const GLFWState&) = delete;
-    GLFWState& operator=(GLFWState&&) = default;
-
-    void DefaultCreate(int width, int height, GLFWmonitor* monitor=nullptr) {
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-        window.reset(glfwCreateWindow(width, height, "", monitor, nullptr));
-    }
-
-    std::array<int, 2> DefaultCreateFullscreen(GLFWmonitor* monitor=nullptr) {
-        if (!monitor) { monitor = glfwGetPrimaryMonitor(); }
-        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
-        std::cout << "Dims: (" << mode->width << ", " << mode->height << ")" << std::endl;
-        std::cout << "Color Bits: (" << mode->redBits << ", " << mode->greenBits << ", " << mode->blueBits << ")" << std::endl;
-        glfwWindowHint(GLFW_RED_BITS, mode->redBits);
-        glfwWindowHint(GLFW_GREEN_BITS, mode->greenBits);
-        glfwWindowHint(GLFW_BLUE_BITS, mode->blueBits);
-        glfwWindowHint(GLFW_REFRESH_RATE, mode->refreshRate);
-        glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
-        window.reset(glfwCreateWindow(mode->width, mode->height, "", monitor, nullptr));
-        return {mode->width, mode->height};
-    }
-
-    std::vector<std::string> GetInstanceExtensions() {
-        uint32_t count = 0;
-        const char** exts = glfwGetRequiredInstanceExtensions(&count);
-        std::vector<std::string> out{};
-        for (int i=0; i< count; ++i) {
-            out.push_back(std::string{exts[i]});
-        }
-        return out;
-    }
-
-    vk::raii::SurfaceKHR CreateSurface(const vk::raii::Instance& instance, const vk::AllocationCallbacks* allocator=nullptr) {
-        VkSurfaceKHR surface_raw = nullptr;
-        const VkAllocationCallbacks *vk_allocator = (allocator) ? &static_cast<const VkAllocationCallbacks&>(*allocator) : nullptr;
-        glfwCreateWindowSurface(*instance, window.get(), vk_allocator, &surface_raw);
-        vk::raii::SurfaceKHR surface{instance, surface_raw, allocator};
-        return surface;
-    }
-};
+//struct InputKeys {
+//    void Callback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+//        GLFW_KEY_1
+//    }
+//};
 
 
 int main(int argc, char** argv) {
@@ -91,8 +42,6 @@ int main(int argc, char** argv) {
 #endif
 
     try {
-        //jms::SysWindow sys_window = jms::SysWindow::Create({});
-
         // Vertex buffer
         std::vector<Vertex> vertices = {
             {{ 0.0f,  0.0f}, {1.0f, 0.0f, 0.0f}},
@@ -105,11 +54,13 @@ int main(int argc, char** argv) {
         size_t size_in_bytes = sizeof(Vertex) * vertices.size();
 
         jms::vulkan::State vulkan_state{};
+        jms::wsi::glfw::Environment glfw_environment{};
+        glfw_environment.EnableHIDPI();
 
-        GLFWState glfw_state{};
-        std::array<int, 2> dims = glfw_state.DefaultCreateFullscreen();
-        std::cout << "Dims: (" << dims[0] << ", " << dims[1] << ")" << std::endl;
-        std::vector<std::string> window_instance_extensions= glfw_state.GetInstanceExtensions();
+        jms::wsi::glfw::Window window = jms::wsi::glfw::Window::DefaultCreate(1024, 768);
+        auto [width, height] = window.DimsPixel();
+        std::cout << "Dims: (" << width << ", " << height << ")" << std::endl;
+        std::vector<std::string> window_instance_extensions= jms::wsi::glfw::GetVulkanInstanceExtensions();
 
         std::vector<std::string> required_instance_extensions{
             /* VK_KHR_display
@@ -127,21 +78,18 @@ int main(int argc, char** argv) {
             .app_name=std::string{"tut2"},
             .engine_name=std::string{"tut2.e"},
             .layer_names={
-                std::string{"VK_LAYER_KHRONOS_synchronization2"},
-                std::string{"VK_LAYER_KHRONOS_validation"}
+                std::string{"VK_LAYER_KHRONOS_synchronization2"}
             },
             .extension_names=instance_extensions
         });
 
         // Create surface; must happen after instance creation, but before examining/creating devices.
         // will be moved from
-        vulkan_state.surface = glfw_state.CreateSurface(vulkan_state.instance);
+        vulkan_state.surface = jms::wsi::glfw::CreateSurface(window, vulkan_state.instance);
 
         vk::raii::PhysicalDevice& physical_device = vulkan_state.physical_devices.at(0);
         //vulkan_state.surface = CreateDisplaySurface(vulkan_state.instance, physical_device);
         //auto dims = sys_window.GetDims();
-        auto width = dims[0];
-        auto height = dims[1];
 
         vulkan_state.render_info = jms::vulkan::SurfaceInfo(vulkan_state.surface,
                                                             physical_device,
@@ -186,14 +134,26 @@ int main(int argc, char** argv) {
         DrawFrame(vulkan_state, vulkan_state.buffers.at(0), vertices);
         vulkan_state.devices.at(0).waitIdle();
 
+        glfwSetKeyCallback(window.get(), [](GLFWwindow* win, int key, int scancode, int action, int mods) {
+            std::cout << "Key: " << key << std::endl;
+        });
         std::cout << "---------------------\n";
+        std::chrono::time_point<std::chrono::system_clock> t0 = std::chrono::system_clock::now();
+        bool not_done = true;
+        while (not_done) {
+            std::chrono::time_point<std::chrono::system_clock> t1 = std::chrono::system_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(t1 - t0).count() > 5) {
+                glfwPollEvents();
+            }
+            if (std::chrono::duration_cast<std::chrono::seconds>(t1 - t0).count() > 10) {
+                not_done = false;
+            }
+        }
         //while (sys_window.ProcessEvents()) { ; }
         //std::cin >> a;
     } catch (std::exception const& exp) {
         std::cout << "Exception caught\n" << exp.what() << std::endl;
     }
-
-    glfwTerminate();
 
 #if defined(_GNUG_)
     std::cout << fmt::format("End\n");
@@ -204,6 +164,7 @@ int main(int argc, char** argv) {
 }
 
 
+#if 0
 vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance,
                                           const vk::raii::PhysicalDevice& physical_device) {
     auto display_properties_return = physical_device.getDisplayPropertiesKHR();
@@ -294,6 +255,7 @@ vk::raii::SurfaceKHR CreateDisplaySurface(const vk::raii::Instance& instance,
 
     return surface;
 }
+#endif
 
 
 void DrawFrame(const jms::vulkan::State& vulkan_state, const vk::raii::Buffer& vertex_buffer, const std::vector<Vertex>& vertices) {
